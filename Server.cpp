@@ -1490,8 +1490,8 @@ Server<URV>::interact(const WhisperMessage& msg, WhisperMessage& reply, FILE* tr
 
       case McmDecode:
         if (commandLog)
-          fprintf(commandLog, "hart=%" PRIu32 " time=%" PRIu64 " mdecode %" PRIu64 " 0x%" PRIx64 "\n",
-                  hartId, msg.time, msg.instrTag, msg.address);
+          fprintf(commandLog, "hart=%" PRIu32 " time=%" PRIu64 " mdecode %" PRIu64 " 0x%" PRIx64 " %" PRIu32 "\n",
+                  hartId, msg.time, msg.instrTag, msg.address, msg.size);
         if (not system_.mcmDecode(hart, msg.time, msg.instrTag, msg.address, msg.size))
           reply.type = Invalid;
         break;

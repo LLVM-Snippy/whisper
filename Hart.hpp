@@ -3337,7 +3337,7 @@ namespace WdRiscv
             }
           if (addr == entry.addr_ + 2)
             {
-              opcode = (entry.opcode_ >> 2) & 0xffff;
+              opcode = (entry.opcode_ >> 16) & 0xffff;
               return true;
             }
         }
