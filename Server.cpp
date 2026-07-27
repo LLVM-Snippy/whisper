@@ -516,7 +516,10 @@ Server<URV>::processStepChanges(Hart<URV>& hart,
       using enum InstId;
       auto id = di.instId();
       if ((id == amocas_q) or (id == amocas_d and sizeof(URV) == 4))
-        count = 2;
+        {
+          count = 2;
+          --regIx; // lasIntReg records 2nd register in pair of changed regs
+        }
 
       for (unsigned i = 0; i < count; ++i, ++regIx)
         {

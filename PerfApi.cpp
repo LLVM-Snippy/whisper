@@ -2118,7 +2118,7 @@ PerfApi<URV>::restoreImsicTopei(HartType& hart, CSRN csrn, unsigned id, unsigned
 template <typename URV>
 void
 PerfApi<URV>::restoreHartValues(HartType& hart, const InstrPac& packet,
-                           const std::array<OpVal, 9>& prevVal)
+                                const std::array<OpVal, 9>& prevVal)
 {
   using OM = WdRiscv::OperandMode;
   using OT = WdRiscv::OperandType;
@@ -2928,6 +2928,10 @@ PerfApi<URV>::determineExplicitOperands(InstrPac& packet)
 
   const auto& di = packet.decodedInst();
 
+  using enum WdRiscv::InstId;
+  auto id = di.instId();
+  bool twoDest = (id == amocas_q) or (id == amocas_d and sizeof(URV) == 4);
+
   packet.operandCount_ = 0;
   const unsigned diOpCount = di.operandCount();
 
@@ -2944,6 +2948,15 @@ PerfApi<URV>::determineExplicitOperands(InstrPac& packet)
       op.type = type;
       op.mode = mode;
       op.number = di.ithOperand(i);     // Irrelevant for immediate ops.
+
+      if (twoDest and i == 0)
+        {
+          // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+          auto& op2 = packet.operands_[packet.operandCount_++];
+          op2.type = op.type;
+          op2.mode = op.mode;
+          op2.number = op.number+1;
+        }
 
       if (op.type == OT::CsReg)
         {

@@ -397,6 +397,7 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
       bool twoRegs = (id == amocas_q) or (id == amocas_d and sizeof(URV) == 4);
       if (twoRegs)
 	{
+          // Method lastIntReg reports the second register in the pair
 	  assert((reg & 1) == 1);
 	  value = intRegs_.read(reg - 1);
 	  formatInstTrace<URV>(out, tag, *this, instSV, 'r', reg - 1, value, tmp);
@@ -634,20 +635,22 @@ Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
   uint64_t val64 = 0;
   if (reg > 0)
     {
-      val64 = peekIntReg(reg);
-      buffer.print(IntRegs<URV>::regName(reg)).printChar('=').print(val64);
-      regCount++;
-
       using enum InstId;
       auto id = di.instId();
       bool twoRegs = (id == amocas_q) or (id == amocas_d and sizeof(URV) == 4);
       if (twoRegs)
         {
-          val64 = peekIntReg(reg+1);
-          buffer.printChar(';');
-          buffer.print(IntRegs<URV>::regName(reg+1)).printChar('=').print(val64);
+          // Method lastIntReg reports the second register in the pair
+	  assert((reg & 1) == 1);
+          val64 = peekIntReg(reg - 1);
+          buffer.print(IntRegs<URV>::regName(reg - 1)).printChar('=').print(val64);
           regCount++;
+          buffer.printChar(';');
         }
+
+      val64 = peekIntReg(reg);
+      buffer.print(IntRegs<URV>::regName(reg)).printChar('=').print(val64);
+      regCount++;
     }
 
   // Changed fp register.
