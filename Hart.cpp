@@ -1067,6 +1067,7 @@ Hart<URV>::reset(bool resetMemoryMappedRegs)
 
   // Apply privilege mode filtering on MCYCLE and MINSTRET (Smcntrpmf extension).
   applySpmcntrpmf();
+  prevMinstretControl_ = minstretControl_;
 }
 
 
@@ -4655,6 +4656,13 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
 	return;
       }
 
+  if (csr == CN::MCYCLECFG or csr == CN::MINSTRETCFG or
+      csr == CN::MCYCLECFGH or csr == CN::MINSTRETCFGH)
+    {
+      applySpmcntrpmf();
+      return;
+    }
+
   if (csr == CN::DCSR)
     {
       DcsrFields<URV> dcsr(val);
@@ -6185,6 +6193,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
             evaluateDebugStep();
 
           prevPerfControl_ = perfControl_;
+          prevMinstretControl_ = minstretControl_;
 
 	  if (traceBranchOn and (di->isBranch() or di->isXRet()))
 	    traceBranch(di);
@@ -7515,6 +7524,7 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
         evaluateDebugStep();
 
       prevPerfControl_ = perfControl_;
+      prevMinstretControl_ = minstretControl_;
     }
   catch (const CoreException& ce)
     {

@@ -2248,6 +2248,56 @@ namespace WdRiscv
             if (csr)
               csr->setImplemented(flag);
           }
+
+      URV inhMask = 0;
+      if (flag)
+        {
+          if constexpr (sizeof(URV) == 8)
+            {
+              inhMask = URV(1) << 62;
+              if (superEnabled_)
+                inhMask |= URV(1) << 61;
+              if (userEnabled_)
+                inhMask |= URV(1) << 60;
+              if (hyperEnabled_ and superEnabled_)
+                inhMask |= URV(1) << 59;
+              if (hyperEnabled_ and userEnabled_)
+                inhMask |= URV(1) << 58;
+            }
+          else
+            {
+              inhMask = URV(1) << 30;
+              if (superEnabled_)
+                inhMask |= URV(1) << 29;
+              if (userEnabled_)
+                inhMask |= URV(1) << 28;
+              if (hyperEnabled_ and superEnabled_)
+                inhMask |= URV(1) << 27;
+              if (hyperEnabled_ and userEnabled_)
+                inhMask |= URV(1) << 26;
+            }
+        }
+
+      if (not rv32_)
+        for (auto num : { MCYCLECFG, MINSTRETCFG })
+          {
+            auto csr = findCsr(num);
+            if (csr)
+              {
+                csr->setWriteMask(inhMask);
+                csr->setPokeMask(inhMask);
+              }
+          }
+      else
+        for (auto num : { MCYCLECFGH, MINSTRETCFGH })
+          {
+            auto csr = findCsr(num);
+            if (csr)
+              {
+                csr->setWriteMask(inhMask);
+                csr->setPokeMask(inhMask);
+              }
+          }
     }
 
     /// Enable/disable virtual supervisor. When enabled, the trap-related

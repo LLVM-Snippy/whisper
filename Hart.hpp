@@ -4349,7 +4349,7 @@ namespace WdRiscv
     /// Return true if minstret is enabled (not inhibited by mcountinhibit /
     /// scountinhibit in sub-M modes and not inhibited by the MINSTRECTCFG CSR).
     bool minstretEnabled() const
-    { return prevPerfControl_ & 0x4 & minstretControl_; }
+    { return prevPerfControl_ & 0x4 & prevMinstretControl_; }
 
     /// Called when a CLINT address is written.
     /// Clear/set software-interrupt bit in the MIP CSR of
@@ -6753,6 +6753,7 @@ namespace WdRiscv
     // (not inhibited by MINSTRETCFG). Remaining bits are not used. This supports
     // the Smcntrpmf extension. This is updated whenver privilege mode changes.
     uint32_t minstretControl_ = 0x4; // Enabled by default.
+    uint32_t prevMinstretControl_ = 0x4; // Value before current instruction.
 
     // Bit 0 is for MCYCLE what bit 2 is for MINSTRET. See minsretControl_.
     uint32_t mcycleControl_ = 0x1;   // Enabled by defalt.
