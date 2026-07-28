@@ -2854,6 +2854,8 @@ namespace WdRiscv
     bool smcsrindOn_ = false;     // Smcsrind extension (indirect CSR).
     bool zihpmOn_ = false;        // Zihpm extension (performance counters).
     bool zicntrOn_ = false;       // Zicntr extension (counters).
+    bool smdbltrpOn_ = false;
+    bool ssdbltrpOn_ = false;
 
     bool recordWrite_ = true;     // True if CSR writes should be recorded (for tracing).
     bool debugMode_ = false;      // True if in debug mode.
