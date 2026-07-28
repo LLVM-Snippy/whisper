@@ -4655,6 +4655,13 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
 	return;
       }
 
+  if (csr == CN::MCYCLECFG or csr == CN::MINSTRETCFG or
+      csr == CN::MCYCLECFGH or csr == CN::MINSTRETCFGH)
+    {
+      applySpmcntrpmf();
+      return;
+    }
+
   if (csr == CN::DCSR)
     {
       DcsrFields<URV> dcsr(val);
@@ -6118,6 +6125,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 
           // Increment pc and execute instruction
 	  pc_ += di->instSize();
+    auto incMinstret = minstretEnabled();
 	  execute(di);
 
           if (hasActiveTrigger())
@@ -6155,7 +6163,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 	      continue;
 	    }
 
-          if (minstretEnabled())
+          if (incMinstret)
             ++minstret_;
 
           // Unlike minstret, this is not inhibited.
@@ -6454,11 +6462,12 @@ Hart<URV>::simpleRunWithLimit()
       di->resetAddr(pc_);
 
       pc_ += di->instSize();
+      auto incMinstret = minstretEnabled();
       execute(di);
 
       if (not hasException_)
         {
-          if (minstretEnabled())
+          if (incMinstret)
             ++minstret_;
           ++retireCount_;
         }
