@@ -1827,6 +1827,10 @@ template <typename URV>
 void
 CsRegs<URV>::enableSmdbltrp(bool flag)
 {
+  if (flag and smdbltrpOn_)
+    return;  // Already enabled.
+  smdbltrpOn_ = flag;
+
   // MDT is bit 42 of mstatus (RV64) or bit 10 of mstatush (RV32).
   // Per spec: WARL field, reset value 1, writable by software.
   using CN = CsrNumber;
@@ -1871,6 +1875,10 @@ template <typename URV>
 void
 CsRegs<URV>::enableSsdbltrp(bool flag)
 {
+  if (flag and ssdbltrpOn_)
+    return;  // Already enabled.
+  ssdbltrpOn_ = flag;
+
   // SDT is bit 24 of mstatus (RV64 and RV32). Reset value is 0.
   using CN = CsrNumber;
   uint64_t sdtBit = uint64_t(1) << 24;
