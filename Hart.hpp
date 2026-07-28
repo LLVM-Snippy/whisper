@@ -3244,8 +3244,24 @@ namespace WdRiscv
       if (iter != mcmOpcodes_.end())
         {
           auto& entry = iter->second;
-          if (size == 4)
-            return false;  // Should not have more than one mcmDecode with size 4
+          if (entry.addr_ == addr and entry.size_ == size)
+            {
+              // We allow refetch.
+              if (size == 2)
+                {
+                  uint16_t opcode = 0;
+                  memory_.read(addr, opcode);
+                  fetchCache_->read<uint16_t>(addr, opcode);
+                }
+              else
+                {
+                  uint32_t opcode = 0;
+                  memory_.read(addr, opcode);
+                  fetchCache_->read<uint32_t>(addr, opcode);
+                }
+              return true;
+            }
+
           if (entry.addr_ == addr or entry.size_ == 4)
             return false;
 
