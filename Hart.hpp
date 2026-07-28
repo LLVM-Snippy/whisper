@@ -6781,7 +6781,6 @@ namespace WdRiscv
     // (not inhibited by MINSTRETCFG). Remaining bits are not used. This supports
     // the Smcntrpmf extension. This is updated whenver privilege mode changes.
     uint32_t minstretControl_ = 0x4; // Enabled by default.
-    uint32_t prevMinstretControl_ = 0x4; // Value before current instruction.
 
     // Bit 0 is for MCYCLE what bit 2 is for MINSTRET. See minsretControl_.
     uint32_t mcycleControl_ = 0x1;   // Enabled by defalt.
