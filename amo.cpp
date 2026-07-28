@@ -63,7 +63,7 @@ Hart<URV>::amoLoad([[maybe_unused]] const DecodedInst* di, uint64_t virtAddr,
                    [[maybe_unused]] Pma::Attrib  attrib, uint64_t& pa,
                    uint64_t& gpa, uint64_t& value)
 {
-  assert(sizeof(LOAD_TYPE) <= sizeof(URV));
+  //assert(sizeof(LOAD_TYPE) <= sizeof(URV));
 
   ldStAddr_ = virtAddr;   // For reporting load addr in trace-mode.
   ldStFaultAddr_ = virtAddr;
@@ -131,7 +131,7 @@ Hart<URV>::amoLoad([[maybe_unused]] const DecodedInst* di, uint64_t virtAddr,
   if (not hasOooVal)
     memRead(pa, pa, uval);
 
-  value = SRV(LOAD_TYPE(uval)); // Sign extend.
+  value = int64_t(LOAD_TYPE(uval)); // Sign extend.
   return true;  // Success.
 }
 
@@ -1171,7 +1171,7 @@ Hart<uint32_t>::execAmocas_d(const DecodedInst* di)
 
   uint64_t pa = 0, gpa = 0;
   uint64_t temp = 0;  // Value loaded by amoload.
-  if (not amoLoad<uint64_t>(di, addr, attrib, pa, gpa, temp))
+  if (not amoLoad<int64_t>(di, addr, attrib, pa, gpa, temp))
     return;
 
   uint32_t temp0 = temp;
