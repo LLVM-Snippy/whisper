@@ -1067,7 +1067,6 @@ Hart<URV>::reset(bool resetMemoryMappedRegs)
 
   // Apply privilege mode filtering on MCYCLE and MINSTRET (Smcntrpmf extension).
   applySpmcntrpmf();
-  prevMinstretControl_ = minstretControl_;
 }
 
 
@@ -6126,6 +6125,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 
           // Increment pc and execute instruction
 	  pc_ += di->instSize();
+    auto incMinstret = minstretEnabled();
 	  execute(di);
 
           if (hasActiveTrigger())
@@ -6163,7 +6163,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 	      continue;
 	    }
 
-          if (minstretEnabled())
+          if (incMinstret)
             ++minstret_;
 
           // Unlike minstret, this is not inhibited.
@@ -6193,7 +6193,6 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
             evaluateDebugStep();
 
           prevPerfControl_ = perfControl_;
-          prevMinstretControl_ = minstretControl_;
 
 	  if (traceBranchOn and (di->isBranch() or di->isXRet()))
 	    traceBranch(di);
@@ -6463,11 +6462,12 @@ Hart<URV>::simpleRunWithLimit()
       di->resetAddr(pc_);
 
       pc_ += di->instSize();
+      auto incMinstret = minstretEnabled();
       execute(di);
 
       if (not hasException_)
         {
-          if (minstretEnabled())
+          if (incMinstret)
             ++minstret_;
           ++retireCount_;
         }
@@ -7524,7 +7524,6 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
         evaluateDebugStep();
 
       prevPerfControl_ = perfControl_;
-      prevMinstretControl_ = minstretControl_;
     }
   catch (const CoreException& ce)
     {

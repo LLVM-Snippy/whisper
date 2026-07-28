@@ -4377,7 +4377,7 @@ namespace WdRiscv
     /// Return true if minstret is enabled (not inhibited by mcountinhibit /
     /// scountinhibit in sub-M modes and not inhibited by the MINSTRECTCFG CSR).
     bool minstretEnabled() const
-    { return prevPerfControl_ & 0x4 & prevMinstretControl_; }
+    { return prevPerfControl_ & 0x4 & minstretControl_; }
 
     /// Called when a CLINT address is written.
     /// Clear/set software-interrupt bit in the MIP CSR of
