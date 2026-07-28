@@ -3239,7 +3239,11 @@ namespace WdRiscv
     /// Support early fetch of opcodes in MCM mode.
     bool mcmDecode(uint64_t tag, uint64_t addr, unsigned size)
     {
+      if (steeEnabled_)
+        addr = stee_.clearSecureBits(addr);
+
       assert(size == 2 or size == 4);
+
       auto iter = mcmOpcodes_.find(tag);
       if (iter != mcmOpcodes_.end())
         {
@@ -3358,6 +3362,14 @@ namespace WdRiscv
             }
         }
 
+      // Caller requesting 4 bytes from a word aligned address. We have a compressed
+      // instruction. This works as long as the caller uses only the compressed instr.
+      if (isCompressedInst(entry.opcode_) and addr == entry.addr_)
+        {
+          opcode = entry.opcode_;
+          return true;
+        }
+
       return false;
     }
 
@@ -3365,13 +3377,13 @@ namespace WdRiscv
     /// tag.
     void pruneMcmOpcodes(uint64_t tag)
     {
-      std::unordered_map<uint64_t, McmOpcode> pruned;
+      std::unordered_map<uint64_t, McmOpcode> kept;
       for (auto& [t, e] : mcmOpcodes_)
         {
-          if (t < tag)
-            pruned[t] = e;
+          if (t >= tag)
+            kept[t] = e;
         }
-      std::swap(pruned, mcmOpcodes_);
+      std::swap(kept, mcmOpcodes_);
     }
 
     /// Called when semi-hosting is enabled and special slli instruction is seen.
