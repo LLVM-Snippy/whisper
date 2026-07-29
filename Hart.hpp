@@ -3256,12 +3256,14 @@ namespace WdRiscv
                   uint16_t opcode = 0;
                   memory_.read(addr, opcode);
                   fetchCache_->read<uint16_t>(addr, opcode);
+                  entry.opcode_ = opcode;
                 }
               else
                 {
                   uint32_t opcode = 0;
                   memory_.read(addr, opcode);
                   fetchCache_->read<uint32_t>(addr, opcode);
+                  entry.opcode_ = opcode;
                 }
               return true;
             }
