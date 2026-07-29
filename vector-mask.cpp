@@ -270,6 +270,7 @@ Hart<URV>::execVmsif_m(const DecodedInst* di)
 	  if (vecRegs_.isMaskDestActive(vd, ix, masked, elemCount, flag))
 	    {
 	      bool input = false;
+              vecRegs_.readMaskRegister(vs1, ix, input);
 	      flag = not found;
 	      found = found or input;
 	    }
