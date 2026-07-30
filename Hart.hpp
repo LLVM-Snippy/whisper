@@ -3936,11 +3936,11 @@ namespace WdRiscv
       return true; // Never reentrant in user mode.
     }
 
-    /// Based on current trigger configurations, either take an exception returning false
-    /// or enter debug mode returning true. If we take an exception epc goes into the
-    /// MEPC/SEPC/... CSR and info goes into the MTVAL/STVAL/... CSR. The instrTag
-    /// parameter is used to annotate the instruction rectord in the log file (if logging
-    /// is enabeld).
+    /// Based on current trigger configurations, either take an exception or we enter
+    /// debug mode or both. Return true if we enter debug mode (with or without
+    /// exception). If we take an exception epc goes into the MEPC/SEPC/... CSR and info
+    /// goes into the MTVAL/STVAL/... CSR. The instrTag parameter is used to annotate the
+    /// instruction rectord in the log file (if logging is enabeld).
     bool takeTriggerAction(FILE* traceFile, URV epc, URV info,
 			   uint64_t instrTag, const DecodedInst* di);
 
@@ -4146,11 +4146,12 @@ namespace WdRiscv
     /// be modified by execution and we can't decrement icount before the instruction
     /// because tdata1 may be read. Re-entrancy detection using option 1 in the spec
     /// has unspecified behavior when relevant CSRs are modified.
-    void evaluateIcountTrigger()
+    void evaluateIcountTrigger(bool skipModified = true)
     {
       if (lastDm_)
         return;    // Triggers do not match/fire in debug mode.
-      csRegs_.evaluateIcountTrigger(lastPriv_, lastVirt_, lastBreakpInterruptEnabled_);
+      csRegs_.evaluateIcountTrigger(lastPriv_, lastVirt_, lastBreakpInterruptEnabled_,
+                                    skipModified);
     }
 
     /// Return true if a pending icount trigger can fire clearing its pending status.

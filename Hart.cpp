@@ -6083,7 +6083,10 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
           if (hasActiveTrigger() and icountTriggerFired() and breakpOrEnterDebugTripped())
             {
               icountTrig_ = true;
-              if (takeTriggerAction(traceFile, currPc_, 0, execCount_, nullptr /*di*/))
+              bool enterDebug = takeTriggerAction(traceFile, currPc_, 0, execCount_, nullptr /*di*/);
+              if (lastInstructionTrapped())
+                evaluateIcountTrigger(false /*skipModifed*/);
+              if (enterDebug)
                 {
                   evaluateDebugStep();
                   icountTrig_ = false;
@@ -7451,6 +7454,8 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
         {
           icountTrig_ = true;
           takeTriggerAction(traceFile, currPc_, 0, execCount_, nullptr /*di*/);
+          if (lastInstructionTrapped())
+            evaluateIcountTrigger(false /*skipModifed*/);
           evaluateDebugStep();
           injectException_ = ExceptionCause::NONE;
           icountTrig_ = false;

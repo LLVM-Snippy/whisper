@@ -1321,9 +1321,9 @@ namespace WdRiscv
     /// Make every active icount trigger count down unless it was written by the current
     /// instruction. Set the hit bit of a counted-down register if its value becomes
     /// zero
-    void evaluateIcountTrigger(PrivilegeMode mode, bool virtMode, bool ie)
+    void evaluateIcountTrigger(PrivilegeMode mode, bool virtMode, bool ie, bool skipModified)
     {
-      triggers_.evaluateIcount(mode, virtMode, ie);
+      triggers_.evaluateIcount(mode, virtMode, ie, skipModified);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.

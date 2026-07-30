@@ -994,7 +994,7 @@ namespace WdRiscv
     /// and the associated actions is not suppressed (e.g. action is ebreak exception and
     /// interrupts are disabled), then consider the trigger as having tripped and set its
     /// hit bit to 1.
-    void evaluateIcount(PrivilegeMode mode, bool virtMode, bool ie);
+    void evaluateIcount(PrivilegeMode mode, bool virtMode, bool ie, bool skipModifed);
 
     bool icountTriggerFired(PrivilegeMode mode, bool virtMode, bool interruptEnabled);
 
