@@ -819,6 +819,7 @@ PerfApi<URV>::retire(unsigned hartIx, uint64_t time, uint64_t tag,
                 << " Out of order retire\n";
       return fail(RetireResult::OutOfOrder);
     }
+  const auto prevLastRetired = hartLastRetired_[hartIx];
   hartLastRetired_[hartIx] = tag;
 
   if (packet.retired())
@@ -925,7 +926,19 @@ PerfApi<URV>::retire(unsigned hartIx, uint64_t time, uint64_t tag,
   // Sanity check. Results at execute and retire must match.
 #if 1
   if (not checkExecVsRetire(hart, packet))
-    return fail(RetireResult::ExecRetireMismatch);
+    {
+      // An async interrupt was taken at commit: singleStep above took the trap instead of
+      // committing this instruction (hart PC is now the handler; it re-executes after
+      // mret). It did NOT retire. Undo the retire-pointer advance so its tag is not
+      // consumed, and report the preemption. The packet is left un-retired so the model
+      // can flush it (still flushable) and redirect fetch to the handler.
+      if (hart.lastInstructionInterrupted() and not packet.trap_)
+        {
+          hartLastRetired_[hartIx] = prevLastRetired;
+          return fail(RetireResult::InterruptPreempted);
+        }
+      return fail(RetireResult::ExecRetireMismatch);
+    }
 #endif
 
   // Undo renaming of destination registers.
