@@ -209,8 +209,9 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
         }
     }
 
-  // Enable uart input (if exists)
-  if (not args.interactive)
+  // Do not start a host-stdin UART reader when console input is disabled.
+  // In embedded cosim, VCS simv stdin belongs to UCLI2Proc.
+  if (not args.interactive and not args.noConInput)
     system.enableUartInput();
 
 #if 0
