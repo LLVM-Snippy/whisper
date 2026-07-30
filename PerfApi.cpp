@@ -147,7 +147,7 @@ PerfApi<URV>::checkTime(const char* caller, uint64_t time)
 template <typename URV>
 bool
 PerfApi<URV>::fetch(unsigned hartIx, uint64_t time, uint64_t tag, uint64_t vpc,
-               bool& trap, ExceptionCause& cause, uint64_t& trapPc)
+                    bool& trap, ExceptionCause& cause, uint64_t& trapPc)
 {
   if (commandLog_) [[unlikely]]
     fprintf(commandLog_, "hart=%" PRIu32 " time=%" PRIu64 " perf_model_fetch %" PRIu64 " 0x%" PRIx64 "\n",
