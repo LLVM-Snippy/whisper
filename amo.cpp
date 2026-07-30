@@ -1330,9 +1330,9 @@ Hart<uint64_t>::execAmocas_q(const DecodedInst* di)
   bool storeOk = true;
   if (temp1 == rdVal1 and temp2 == rdVal2)
     {
-      storeOk = store<uint64_t>(di, pa1, rs2Val1, false);
+      storeOk = store<uint64_t>(di, vaddr, rs2Val1, false);
       assert(pa2 == pa1 + 8);
-      storeOk = storeOk and store<uint64_t>(di, pa2, rs2Val2, false);
+      storeOk = storeOk and store<uint64_t>(di, vaddr + 8, rs2Val2, false);
     }
 
   if (storeOk and not breakpOrEnterDebugTripped() and rd != 0)
