@@ -257,7 +257,11 @@ namespace WhisperUtil  {
     bool isReturn() const
     { return instType == 'r'; }
 
-    // Return true if this is a jump instruction (excluding call/return).
+    // Return true if this is a co-routine swap instruction.
+    bool isCoroutineSwap() const
+    { return instType == 'w'; }
+
+    // Return true if this is a jump instruction (excluding call/return/coroutine-swap).
     bool isJump() const
     { return instType == 'j'; }
 
