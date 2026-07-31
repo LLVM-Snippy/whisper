@@ -813,6 +813,8 @@ Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
         {
           if (di.isReturn())
             buffer.printChar('r');
+          else if (di.isCoroutineSwap())
+            buffer.printChar('w');
           else if (di.isCall())
             buffer.printChar('c');
           else

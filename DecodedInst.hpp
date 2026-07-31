@@ -479,15 +479,22 @@ namespace WdRiscv
     bool isUnconditionalBranch() const
     { return isBranch() and not isConditionalBranch(); }
 
-    /// Return true if this is a call instruction: jal/jalr with destination register X1
-    /// or X5.
+    /// Return true if this is a call: an unconditional branch (jal/jalr) whose
+    /// rd is a link register (x1/x5), excluding the co-routine swap, which is its
+    /// own control-transfer class.
     bool isCall() const
-    { return isUnconditionalBranch() and (op0() == 1 or op0() == 5); }
+    { return isUnconditionalBranch() and (op0() == 1 or op0() == 5) and not isCoroutineSwap(); }
 
-    /// Return true if this is a return instruction: jalr with jump address in ra,
-    /// destination register x0,
+    /// Return true if this is a return: a jalr that pops the return-address
+    /// stack per the RISC-V RAS-hint table -- rs1 is a link register, rd is not.
     bool isReturn() const
-    { return isBranchToRegister() and op0() == 0 and op1() == 1 and op2() == 0; }
+    { return isBranchToRegister() and (op1() == 1 or op1() == 5) and op0() != 1 and op0() != 5; }
+
+    /// Return true if this is a co-routine swap: a jalr with both rd and rs1
+    /// link registers (x1/x5) and rd != rs1. A distinct control-transfer class,
+    /// neither call nor return.
+    bool isCoroutineSwap() const
+    { return isBranchToRegister() and (op0() == 1 or op0() == 5) and (op1() == 1 or op1() == 5) and op0() != op1(); }
     
     /// Return true if this is a compressed instruction.
     bool isCompressed() const
