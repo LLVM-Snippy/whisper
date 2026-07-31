@@ -7790,6 +7790,9 @@ template <typename URV>
 void
 CsRegs<URV>::hyperPoke(Csr<URV>* csr)
 {
+  if (not hyperEnabled_)
+    return;
+
   auto num = csr->getNumber();
   auto value = csr->read();
 
