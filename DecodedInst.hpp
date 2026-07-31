@@ -485,36 +485,10 @@ namespace WdRiscv
     { return isUnconditionalBranch() and (op0() == 1 or op0() == 5); }
 
     /// Return true if this is a return instruction: jalr with jump address in ra,
-    /// destination register x0, and an immediate of 0,
+    /// destination register x0,
     bool isReturn() const
     { return isBranchToRegister() and op0() == 0 and op1() == 1 and op2() == 0; }
-
-    /// Return true if this instruction is a return address stack pop.
-    bool isRasPop() const
-    {
-      auto rd = op0();
-      auto rs1 = op1();
-      return isBranchToRegister() and (rd != 1 and rd != 5) and (rs1 == 1 or rs1 == 5);
-    }
-
-    /// Return true if this instruction is a return address stack push.
-    bool isRasPush() const
-    {
-      auto rd = op0();
-      auto rs1 = op1();
-      return isBranchToRegister() and (rd == 1 or rd == 5) and (rs1 != 1 and rs1 != 5);
-    }
     
-    /// Return true if this instruction is a return address stack pop then push.
-    bool isRasPopPush() const
-    {
-      auto rd = op0();
-      auto rs1 = op1();
-      if (rd != rs1)
-        return false;
-      return isBranchToRegister() and (rd == 1 or rd == 5);
-    }
-
     /// Return true if this is a compressed instruction.
     bool isCompressed() const
     { return entry_ and entry_->isCompressed(); }
