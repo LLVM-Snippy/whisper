@@ -66,7 +66,8 @@ namespace TT_PERF         // Tenstorrent Whisper Performance Model API
     WrongPc,              ///< PC mismatch at retire time
     ExecRetireMismatch,   ///< Execute vs retire results differ
     ScMispredict,         ///< SC outcome at retire differs from the execute-time prediction
-    CsrMispredict         ///< CSR write outcome at retire differs from the execute-time prediction
+    CsrMispredict,        ///< CSR write outcome at retire differs from the execute-time prediction
+    InterruptPreempted    ///< Async interrupt taken at commit instead of this instruction; it did not retire
   };
 
   /// Convert RetireResult to string for error messages
@@ -84,6 +85,7 @@ namespace TT_PERF         // Tenstorrent Whisper Performance Model API
       case RetireResult::ExecRetireMismatch: return "Execute vs retire mismatch";
       case RetireResult::ScMispredict:       return "SC outcome mispredict (execute vs retire differ)";
       case RetireResult::CsrMispredict:      return "CSR outcome mispredict (execute vs retire differ)";
+      case RetireResult::InterruptPreempted: return "Async interrupt preempted this instruction";
     }
     return "Unknown error";
   }

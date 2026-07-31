@@ -4709,7 +4709,7 @@ CsRegs<URV>::defineMachineRegs()
   //           D E       P S W V X U P S  S  P  S  P P B P P I E I I
   //             S       E R   M R M R       P     P I E I I E S E E
   //                     L           V               E   E E
-  URV mask = 0b0'0000000'0'1'1'1'1'1'1'11'11'11'11'1'1'0'1'0'1'0'1'0;
+  URV mask = 0b0'0000000'0'1'1'1'1'1'1'00'11'11'11'1'1'0'1'0'1'0'1'0;
   URV val =  0b0'0000000'0'0'0'0'0'0'0'00'00'11'00'0'0'0'0'0'0'0'0'0;
   if (not rv32_)
     {
@@ -4717,6 +4717,7 @@ CsRegs<URV>::defineMachineRegs()
       val |= uint64_t(0b1010) << 32;   // Value of SXL and UXL : sxlen=uxlen=64
     }
   URV pokeMask = mask | (URV(1) << (sizeof(URV)*8 - 1));  // Make SD pokable.
+  pokeMask |= URV(3) << 15; // Make XS pokable.
 
   defineCsr("mstatus", Csrn::MSTATUS, mand, imp, val, mask, pokeMask);
   if (rv32_)
@@ -7790,6 +7791,9 @@ template <typename URV>
 void
 CsRegs<URV>::hyperPoke(Csr<URV>* csr)
 {
+  if (not hyperEnabled_)
+    return;
+
   auto num = csr->getNumber();
   auto value = csr->read();
 

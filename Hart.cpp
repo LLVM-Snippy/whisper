@@ -4655,6 +4655,13 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
 	return;
       }
 
+  if (csr == CN::MCYCLECFG or csr == CN::MINSTRETCFG or
+      csr == CN::MCYCLECFGH or csr == CN::MINSTRETCFGH)
+    {
+      applySpmcntrpmf();
+      return;
+    }
+
   if (csr == CN::DCSR)
     {
       DcsrFields<URV> dcsr(val);
@@ -6076,7 +6083,10 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
           if (hasActiveTrigger() and icountTriggerFired() and breakpOrEnterDebugTripped())
             {
               icountTrig_ = true;
-              if (takeTriggerAction(traceFile, currPc_, 0, execCount_, nullptr /*di*/))
+              bool enterDebug = takeTriggerAction(traceFile, currPc_, 0, execCount_, nullptr /*di*/);
+              if (lastInstructionTrapped())
+                evaluateIcountTrigger(false /*skipModifed*/);
+              if (enterDebug)
                 {
                   evaluateDebugStep();
                   icountTrig_ = false;
@@ -6118,6 +6128,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 
           // Increment pc and execute instruction
 	  pc_ += di->instSize();
+    auto incMinstret = minstretEnabled();
 	  execute(di);
 
           if (hasActiveTrigger())
@@ -6155,7 +6166,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 	      continue;
 	    }
 
-          if (minstretEnabled())
+          if (incMinstret)
             ++minstret_;
 
           // Unlike minstret, this is not inhibited.
@@ -6454,11 +6465,12 @@ Hart<URV>::simpleRunWithLimit()
       di->resetAddr(pc_);
 
       pc_ += di->instSize();
+      auto incMinstret = minstretEnabled();
       execute(di);
 
       if (not hasException_)
         {
-          if (minstretEnabled())
+          if (incMinstret)
             ++minstret_;
           ++retireCount_;
         }
@@ -7442,6 +7454,8 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
         {
           icountTrig_ = true;
           takeTriggerAction(traceFile, currPc_, 0, execCount_, nullptr /*di*/);
+          if (lastInstructionTrapped())
+            evaluateIcountTrigger(false /*skipModifed*/);
           evaluateDebugStep();
           injectException_ = ExceptionCause::NONE;
           icountTrig_ = false;

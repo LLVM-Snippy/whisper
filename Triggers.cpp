@@ -473,7 +473,8 @@ Triggers<URV>::icountTriggerFired(PrivilegeMode mode, bool virtMode, bool interr
 
 template <typename URV>
 void
-Triggers<URV>::evaluateIcount(PrivilegeMode mode, bool virtMode, bool interruptEnabled)
+Triggers<URV>::evaluateIcount(PrivilegeMode mode, bool virtMode, bool interruptEnabled,
+                              bool skipModified)
 {
   // Check if we should skip tripping because of reentrant behavior. 
   bool skip = not interruptEnabled;
@@ -485,8 +486,8 @@ Triggers<URV>::evaluateIcount(PrivilegeMode mode, bool virtMode, bool interruptE
       if (not trig.matchInstCount(mode, virtMode))
         continue;
 
-      if (trig.isModified())
-	continue; // Trigger was written by current instruction.
+      if (trig.isModified() and skipModified)
+        continue; // Trigger was written by current instruction.
 
       if (unsigned(trig.getAction()) <= unsigned(TriggerAction::EnterDebug))
         if (not trig.isEnterDebugOnHit() and skip)

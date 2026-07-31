@@ -1321,9 +1321,9 @@ namespace WdRiscv
     /// Make every active icount trigger count down unless it was written by the current
     /// instruction. Set the hit bit of a counted-down register if its value becomes
     /// zero
-    void evaluateIcountTrigger(PrivilegeMode mode, bool virtMode, bool ie)
+    void evaluateIcountTrigger(PrivilegeMode mode, bool virtMode, bool ie, bool skipModified)
     {
-      triggers_.evaluateIcount(mode, virtMode, ie);
+      triggers_.evaluateIcount(mode, virtMode, ie, skipModified);
       auto tselect = peek(CsrNumber::TSELECT);
       if (triggers_.getLocalHit(tselect))
 	recordWrite(CsrNumber::TDATA1);  // Hit bit in TDATA1 changed.
@@ -2247,6 +2247,56 @@ namespace WdRiscv
             auto csr = findCsr(num);
             if (csr)
               csr->setImplemented(flag);
+          }
+
+      URV inhMask = 0;
+      if (flag)
+        {
+          if constexpr (sizeof(URV) == 8)
+            {
+              inhMask = URV(1) << 62;
+              if (superEnabled_)
+                inhMask |= URV(1) << 61;
+              if (userEnabled_)
+                inhMask |= URV(1) << 60;
+              if (hyperEnabled_ and superEnabled_)
+                inhMask |= URV(1) << 59;
+              if (hyperEnabled_ and userEnabled_)
+                inhMask |= URV(1) << 58;
+            }
+          else
+            {
+              inhMask = URV(1) << 30;
+              if (superEnabled_)
+                inhMask |= URV(1) << 29;
+              if (userEnabled_)
+                inhMask |= URV(1) << 28;
+              if (hyperEnabled_ and superEnabled_)
+                inhMask |= URV(1) << 27;
+              if (hyperEnabled_ and userEnabled_)
+                inhMask |= URV(1) << 26;
+            }
+        }
+
+      if (not rv32_)
+        for (auto num : { MCYCLECFG, MINSTRETCFG })
+          {
+            auto csr = findCsr(num);
+            if (csr)
+              {
+                csr->setWriteMask(inhMask);
+                csr->setPokeMask(inhMask);
+              }
+          }
+      else
+        for (auto num : { MCYCLECFGH, MINSTRETCFGH })
+          {
+            auto csr = findCsr(num);
+            if (csr)
+              {
+                csr->setWriteMask(inhMask);
+                csr->setPokeMask(inhMask);
+              }
           }
     }
 
