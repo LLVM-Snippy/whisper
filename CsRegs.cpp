@@ -4358,6 +4358,18 @@ CsRegs<URV>::configCsr(CsrNumber csrNum, bool implemented, URV resetValue,
       auto& sstatus = regs_.at(size_t(CsrNumber::SSTATUS));
       sstatus.setWriteMask(sstatus.getWriteMask() & csr.getWriteMask());
       sstatus.setPokeMask(sstatus.getPokeMask() & csr.getPokeMask());
+
+      // Backward compatibility: If MSTATUS.XS is writable, make SSTATUS.XS writable.
+      MstatusFields<URV> msf(csr.getWriteMask());
+      MstatusFields<URV> ssf(sstatus.getWriteMask());
+      ssf.bits_.XS = msf.bits_.XS;
+      sstatus.setWriteMask(ssf.value_);
+
+      // Same for pokable XS. If MSTATUS.XS pokable, so is SSTATUS.XS.
+      msf = MstatusFields<URV>(csr.getPokeMask());
+      ssf = MstatusFields<URV>(sstatus.getPokeMask());
+      ssf.bits_.XS = msf.bits_.XS;
+      sstatus.setPokeMask(ssf.value_);
     }
 
   return true;
