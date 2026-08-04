@@ -1081,6 +1081,8 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
         hart.configVectorLegalizeForEgs(flag);
     }
 
+  // For backward compatibility. Use partial_segment_load and partial_segment_store
+  // instead.
   tag = "partial_segment_update";
   if (vconf.contains(tag))
     {
@@ -1088,7 +1090,30 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
       if (not getJsonBoolean(tag, vconf.at(tag), flag))
         errors++;
       else
-        hart.configVectorPartialSegmentUpdate(flag);
+        {
+          hart.configVecPartialSegLoad(flag);
+          hart.configVecPartialSegStore(flag);
+        }
+    }
+
+  tag = "partial_segment_load";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (not getJsonBoolean(tag, vconf.at(tag), flag))
+        errors++;
+      else
+        hart.configVecPartialSegLoad(flag);
+    }
+
+  tag = "partial_segment_store";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (not getJsonBoolean(tag, vconf.at(tag), flag))
+        errors++;
+      else
+        hart.configVecPartialSegStore(flag);
     }
 
   tag = "fp_usum_nan_canonicalize";
