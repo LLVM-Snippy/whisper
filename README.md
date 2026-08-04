@@ -902,9 +902,16 @@ The vector configuration is an object with the following fields:
 * fp_usum_nan_canonicalize: for each EEW, enables use of canonical NaN in
   vfredusum/vfwredusum result, default is false.
 
-* partial_segment_update: partially commit the fields of a load/store segment encountering
+* partial_segment_load: partially commit the fields of a load segment encountering
   an exception/trigger-hit at a given index when true and commit no field in the case of
   an exception when false, default is false.
+
+* partial_segment_store: partially commit the fields of a store segment encountering
+  an exception/trigger-hit at a given index when true and commit no field in the case of
+  an exception when false, default is false.
+
+* partial_segment_update: same as setting both partial_semgent_load and partial_segment_store
+  and has lower if either or both of them are present.
 
 * always_mark_dirty: when true, an executed vector instruction with a vector register
   destination causes the vector state (MSTATUS.VS) to be marked dirty even if no element

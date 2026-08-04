@@ -434,11 +434,17 @@ namespace WdRiscv
     void configTailAgnosticAllOnes(bool flag)
     { tailAgnOnes_ = flag; }
 
-    /// If flag is false then vector segment load/store will not commit any of the fields
+    /// If flag is false then vector segment load will not commit any of the fields
     /// at a given index if any of those fields encouters an exception. Otherwise, the
     /// fields up to the one that encoutered the exception are updated.
-    void configPartialSegmentUpdate(bool flag)
-    { partialSegUpdate_ = flag; }
+    void configPartialSegLoad(bool flag)
+    { partialSegLoad_ = flag; }
+
+    /// If flag is false then vector segment stor will not commit any of the fields
+    /// at a given index if any of those fields encouters an exception. Otherwise, the
+    /// fields up to the one that encoutered the exception are updated.
+    void configPartialSegStore(bool flag)
+    { partialSegStore_ = flag; }
 
     /// When flag is true, trap on invalid/unsuported vtype configuraions in vsetvl,
     /// vsetvli, vsetivli. When flag is false, set vtype.vill instead.
@@ -957,7 +963,8 @@ namespace WdRiscv
     bool legalizeVsetvlAvl_ = false; // If true legalize VL to VLMAX if vtype is legal (if applicable).
     bool legalizeVsetvliAvl_ = false; // If true legalize VL to VLMAX if vtype is legal (if applicable).
     bool legalizeForEgs_ = false;
-    bool partialSegUpdate_ = false;
+    bool partialSegLoad_ = false;
+    bool partialSegStore_ = false;
     bool vmvrIgnoreVill_ = false;   // If true, allow vmv*r.v instructions to execute when vill is set.
     bool altfmt_ = false;  // If true use BFloat16 instead of Float16 for half-precision.
 
