@@ -7853,7 +7853,7 @@ InstTable::setupInstVec()
 
       // Zvfwdota16bf
       { "vfwdota.vv", InstId::vfwdota_vv,
-        0b101000'0'00000'00000'001'00000'1110111, // Opcode
+        0b100110'0'00000'00000'001'00000'1110111, // Opcode
         0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
         RvExtension::Zvfwdota16bf, RvFormat::R,
         OperandType::VecReg, OperandMode::Write, rdMask,
