@@ -2078,6 +2078,16 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
                                       .global = false, .dirty = true, .pageSize = 4096 };
               *attribs = combineStageAttribs(s1Attribs, s2Attribs, /*isMsi*/ true);
             }
+
+          // T2GPA: for a PCIe ATS translation request with DC.tc.T2GPA=1, the completion
+          // must return the GPA (the first-stage result) rather than the translated SPA.
+          // The MSI/second-stage translation above still ran to validate the GPA mapping;
+          // the device's later Translated requests carry this GPA and are re-translated.
+          // This mirrors the non-MSI path below, whose early return here would otherwise
+          // skip.
+          if (req.isAts() and dc.t2gpa())
+            pa = gpa;
+
           return true;  // A is address of virtual file and MSI translation successful
         }
       if (cause != 0)
