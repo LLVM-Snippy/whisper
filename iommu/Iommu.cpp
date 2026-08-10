@@ -2347,9 +2347,14 @@ Iommu::stage1Translate(uint64_t satpVal, uint64_t hgatpVal, PrivilegeMode pm, bo
   bool ok = cause == unsigned(ExceptionCause::NONE);
   if (ok and attribs)
     {
-      if (s1Mode == 0)  // First stage is Bare: no PTE, all permissions, unconstrained size.
-        *attribs = PteAttribs{ .read = true, .write = true, .exec = true,
-                               .global = true, .dirty = true, .pageSize = 0 };
+      if (s1Mode == 0)
+        {
+          // First stage is Bare: no PTE, all permissions, unconstrained size.
+          // No first-stage PTE means no G bit; the ATS Global bit is sourced from the
+          // first-stage leaf PTE, so a Bare first stage must report Global=0 (matches RTL).
+          *attribs = PteAttribs{ .read = true, .write = true, .exec = true,
+                                 .global = false, .dirty = true, .pageSize = 0 };
+        }
       else
         {
           attribs->read     = leafEntry.read_;
