@@ -3150,7 +3150,7 @@ Iommu::atsTranslate(const IommuRequest& req, AtsResponse& response, unsigned& ca
       // only reported when the request carried an execute intent.
       response.readPerm  = attribs.read;
       response.writePerm = attribs.write;
-      response.execPerm  = attribs.exec and req.isExec();
+      response.execPerm  = attribs.exec and req.isAtsExec;
       // Global is reported only for requests with a valid process id (PASID). combineStage
       // Attribs already forced it off for MSI addresses.
       response.global    = req.hasProcId and attribs.global;

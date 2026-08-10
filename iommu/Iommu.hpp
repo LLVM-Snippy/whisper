@@ -381,6 +381,7 @@ namespace TT_IOMMU
     PM privMode = PM::User;   // Privilege mode
     unsigned size = 0;        // Size of access in bytes
     bool isDebug = false;     // Request is from debug interface
+    bool isAtsExec = false;   // True if ATS request is for execute privilege.
 
     /// Return true if this is a translated request: iova is an SPA that is already
     /// translated and need no further translation. Return false if this an untranslated
@@ -822,6 +823,7 @@ namespace TT_IOMMU
           status = Status::UnsupportedRequest;
       }
     };
+
     AtsResponse::Status atsTranslate(const IommuRequest& req, AtsResponse& response, unsigned& cause,
                                      AtsMsiInfo* msiInfo = nullptr);
 
