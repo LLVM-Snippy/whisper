@@ -902,9 +902,16 @@ The vector configuration is an object with the following fields:
 * fp_usum_nan_canonicalize: for each EEW, enables use of canonical NaN in
   vfredusum/vfwredusum result, default is false.
 
-* partial_segment_update: partially commit the fields of a load/store segment encountering
+* partial_segment_load: partially commit the fields of a load segment encountering
   an exception/trigger-hit at a given index when true and commit no field in the case of
   an exception when false, default is false.
+
+* partial_segment_store: partially commit the fields of a store segment encountering
+  an exception/trigger-hit at a given index when true and commit no field in the case of
+  an exception when false, default is false.
+
+* partial_segment_update: same as setting both partial_semgent_load and partial_segment_store
+  and has lower if either or both of them are present.
 
 * always_mark_dirty: when true, an executed vector instruction with a vector register
   destination causes the vector state (MSTATUS.VS) to be marked dirty even if no element
@@ -1254,7 +1261,11 @@ Zvkb, Zicond, Zca, Zcb, Zcf, Zcd, Zfa, Zfbfmin, Zvfbfmin, Zvfbfwma, Zvqdot, Sstc
 Svadu, Svade, Smaia, Ssaia, Zacas, Zimop, Zcmop, Smrnmi, Zicsr, Zicntr, Zihpm, Zifencei,
 Zihintpause, Smmpm, Ssnpm, Smnpm, Sscofpmf, Smstateen, Ssqosid, Sdtrig, Zicfilp, Zicfiss,
 Zic64b, Ziccamoa, Ziccif, Zicclsm, Ziccrse, Za64rs, Zaamo, Zalrsc, Zihintntl, Zvzip,
-Zvabd, Smdbltrp, Ssdbltrp, Zibi, Zabha, Zalasr, Svvptc, Zilsd, Zclsd,
+Zvabd, Smdbltrp, Ssdbltrp, Zibi, Zabha, Zalasr, Svvptc, Zilsd, Zclsd, Zvfbfa, Zvfofp8min,
+Smcsps, Sscsps, Smip, Ssip, Smijt, Ssijt, Smehv, Ssehv, Smeihv, Sseihv, Smnip, Ssnip,
+Smidctrl, Ssidctrl, Smcdeleg, Smcsrind, Sscsrind, Smcntrpmf, Smepmp, Zvqwdota8i,
+Zvqwbdota8i, Zvqwdota16i, Zvqwbdota16i, Zvfbdota32f, Zvfwdota16bf, Zvfqwdota8f,
+Zvfqwbdota8f, Zvfwbdota16bf
 
 
 <a name="RISCOF"/>

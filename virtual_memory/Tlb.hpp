@@ -194,7 +194,8 @@ namespace WdRiscv
           }
     }
 
-    /// Invalidate every entry matching given vmid and address space identifier.
+    /// Invalidate every entry matching given vmid and address space identifier
+    /// except global entries.
     void invalidateAsidVmid(uint32_t asid, uint32_t vmid, uint32_t wid)
     {
       for (auto& entry : entries_)
@@ -377,8 +378,6 @@ namespace WdRiscv
     /// Set the address translation mode.
     void setMode(Mode m)
     {
-      if (mode_ != m)
-        invalidate();
       mode_ = m;
     }
 

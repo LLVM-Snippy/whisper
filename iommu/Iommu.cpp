@@ -2078,6 +2078,16 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
                                       .global = false, .dirty = true, .pageSize = 4096 };
               *attribs = combineStageAttribs(s1Attribs, s2Attribs, /*isMsi*/ true);
             }
+
+          // T2GPA: for a PCIe ATS translation request with DC.tc.T2GPA=1, the completion
+          // must return the GPA (the first-stage result) rather than the translated SPA.
+          // The MSI/second-stage translation above still ran to validate the GPA mapping;
+          // the device's later Translated requests carry this GPA and are re-translated.
+          // This mirrors the non-MSI path below, whose early return here would otherwise
+          // skip.
+          if (req.isAts() and dc.t2gpa())
+            pa = gpa;
+
           return true;  // A is address of virtual file and MSI translation successful
         }
       if (cause != 0)
@@ -2337,9 +2347,14 @@ Iommu::stage1Translate(uint64_t satpVal, uint64_t hgatpVal, PrivilegeMode pm, bo
   bool ok = cause == unsigned(ExceptionCause::NONE);
   if (ok and attribs)
     {
-      if (s1Mode == 0)  // First stage is Bare: no PTE, all permissions, unconstrained size.
-        *attribs = PteAttribs{ .read = true, .write = true, .exec = true,
-                               .global = true, .dirty = true, .pageSize = 0 };
+      if (s1Mode == 0)
+        {
+          // First stage is Bare: no PTE, all permissions, unconstrained size.
+          // No first-stage PTE means no G bit; the ATS Global bit is sourced from the
+          // first-stage leaf PTE, so a Bare first stage must report Global=0 (matches RTL).
+          *attribs = PteAttribs{ .read = true, .write = true, .exec = true,
+                                 .global = false, .dirty = true, .pageSize = 0 };
+        }
       else
         {
           attribs->read     = leafEntry.read_;
@@ -3140,7 +3155,7 @@ Iommu::atsTranslate(const IommuRequest& req, AtsResponse& response, unsigned& ca
       // only reported when the request carried an execute intent.
       response.readPerm  = attribs.read;
       response.writePerm = attribs.write;
-      response.execPerm  = attribs.exec and req.isExec();
+      response.execPerm  = attribs.exec and req.isAtsExec;
       // Global is reported only for requests with a valid process id (PASID). combineStage
       // Attribs already forced it off for MSI addresses.
       response.global    = req.hasProcId and attribs.global;

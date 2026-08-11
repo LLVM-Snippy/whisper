@@ -1798,7 +1798,10 @@ Hart<URV>::execVfdiv_vv(const DecodedInst* di)
     {
     case EW::Half:
       if (vecRegs_.altfmt())
-        { postVecFail(di); return; }
+        {
+          postVecFail(di);
+          return;
+        }
       vfop_vv<Float16>(vd, vs1, vs2, group, start, elems, masked, doFdiv<Float16>);
       break;
     case EW::Word:

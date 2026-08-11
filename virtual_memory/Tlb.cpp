@@ -85,8 +85,7 @@ Tlb::insertEntry(const TlbEntry& te)
       return false;
     }
   
-          *entry = te;
-      entry->counter_ = 0;
-      return true;
-   
+  *entry = te;
+  entry->counter_ = 0;
+  return true;
 }

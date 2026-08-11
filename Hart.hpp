@@ -778,10 +778,15 @@ namespace WdRiscv
     void configTailAgnosticAllOnes(bool flag)
     { vecRegs_.configTailAgnosticAllOnes(flag); }
 
-    /// Configure partial vector load/store segment update. If flag is false, then none of
-    /// a segment fields are committed if any field encounters an exception.
-    void configVectorPartialSegmentUpdate(bool flag)
-    { vecRegs_.configPartialSegmentUpdate(flag); }
+    /// Configure partial vector load segment update. If flag is false, then none of a
+    /// segment fields are committed if any field encounters an exception.
+    void configVecPartialSegLoad(bool flag)
+    { vecRegs_.configPartialSegLoad(flag); }
+
+    /// Configure partial vector store segment update. If flag is false, then none of a
+    /// segment fields are committed if any field encounters an exception.
+    void configVecPartialSegStore(bool flag)
+    { vecRegs_.configPartialSegStore(flag); }
 
     /// Return currently configured element width
     ElementWidth elemWidth() const

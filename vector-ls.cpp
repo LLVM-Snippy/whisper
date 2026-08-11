@@ -1975,7 +1975,7 @@ Hart<URV>::vectorLoadSeg(const DecodedInst* di, ElementWidth eew,
 
 	  if (skip)
 	    {
-              if (vecRegs_.partialSegUpdate_)
+              if (vecRegs_.partialSegLoad_)
                 vecRegs_.write(fdv, ix, groupX8, elem);
 	      continue;
 	    }
@@ -1995,7 +1995,7 @@ Hart<URV>::vectorLoadSeg(const DecodedInst* di, ElementWidth eew,
               if (ldStAddrTriggerHit(pmva, elemSize, timing, isLd))
                 {
                   ldStInfo.removeLastElem();
-                  if (not vecRegs_.partialSegUpdate_)
+                  if (not vecRegs_.partialSegLoad_)
                     while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
                       ldStInfo.removeLastElem();
                   markVsDirty();
@@ -2016,7 +2016,7 @@ Hart<URV>::vectorLoadSeg(const DecodedInst* di, ElementWidth eew,
 	  else
 	    {
 	      ldStInfo.removeLastElem();
-              if (not vecRegs_.partialSegUpdate_)
+              if (not vecRegs_.partialSegLoad_)
                 while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
                   ldStInfo.removeLastElem();
               markVsDirty();
@@ -2047,13 +2047,13 @@ Hart<URV>::vectorLoadSeg(const DecodedInst* di, ElementWidth eew,
 	      return true;
 	    }
 
-          if (vecRegs_.partialSegUpdate_)
+          if (vecRegs_.partialSegLoad_)
             vecRegs_.write(fdv, ix, groupX8, elem);
 	}
 
       // If we get here then no excpections were encoutered. Commit all the fields if
       // partial update is not on.
-      if (not vecRegs_.partialSegUpdate_)
+      if (not vecRegs_.partialSegLoad_)
         {
           unsigned nelems = ldStInfo.elems_.size();
           assert(nelems >= fieldCount);
@@ -2234,7 +2234,7 @@ Hart<URV>::vectorStoreSeg(const DecodedInst* di, ElementWidth eew,
 
           if (cause == ExceptionCause::NONE and not breakpOrEnterDebugTripped())
             {
-              if (vecRegs_.partialSegUpdate_)
+              if (vecRegs_.partialSegStore_)
                 if (not writeForStore(faddr, pa1, pa2, val))
                   assert(0 && "Error: Assertion failed");
               ldStInfo.setLastElem(pa1, pa2, val);
@@ -2242,7 +2242,7 @@ Hart<URV>::vectorStoreSeg(const DecodedInst* di, ElementWidth eew,
           else
             {
               ldStInfo.removeLastElem();
-              if (not vecRegs_.partialSegUpdate_)
+              if (not vecRegs_.partialSegStore_)
                 while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
                   ldStInfo.removeLastElem();
               markVsDirty();
@@ -2255,7 +2255,7 @@ Hart<URV>::vectorStoreSeg(const DecodedInst* di, ElementWidth eew,
 
       // If we get here, no exception was encoutered, update all the fields if not in
       // partial-update.
-      if (not vecRegs_.partialSegUpdate_)
+      if (not vecRegs_.partialSegStore_)
         {
           for (const auto& elem : ldStInfo.elems_)
             {
@@ -2594,7 +2594,7 @@ Hart<URV>::vectorLoadSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
 
           if (skip)
             {
-              if (vecRegs_.partialSegUpdate_)
+              if (vecRegs_.partialSegLoad_)
                 vecRegs_.write(fdv, ix, groupX8, elem);
               continue;
             }
@@ -2614,7 +2614,7 @@ Hart<URV>::vectorLoadSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
               if (ldStAddrTriggerHit(pmva, elemSize, timing, isLd))
                 {
                   ldStInfo.removeLastElem();
-                  if (not vecRegs_.partialSegUpdate_)
+                  if (not vecRegs_.partialSegLoad_)
                     while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
                   ldStInfo.removeLastElem();
                   markVsDirty();
@@ -2632,13 +2632,13 @@ Hart<URV>::vectorLoadSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
               elem = data;
               ldStInfo.setLastElem(pa1, pa2, elem);
 
-              if (vecRegs_.partialSegUpdate_)
+              if (vecRegs_.partialSegLoad_)
                 vecRegs_.write(fdv, ix, groupX8, elem);
             }
           else
             {
               ldStInfo.removeLastElem();
-              if (not vecRegs_.partialSegUpdate_)
+              if (not vecRegs_.partialSegLoad_)
                 while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
                   ldStInfo.removeLastElem();
               markVsDirty();
@@ -2650,7 +2650,7 @@ Hart<URV>::vectorLoadSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
 
       // If we get here then no excpections were encoutered. Commit all the fields if
       // partial update is not on.
-      if (not vecRegs_.partialSegUpdate_)
+      if (not vecRegs_.partialSegLoad_)
         {
           unsigned nelems = ldStInfo.elems_.size();
           assert(nelems >= fieldCount);
@@ -2821,7 +2821,7 @@ Hart<URV>::vectorStoreSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
 
           if (cause == ExceptionCause::NONE and not breakpOrEnterDebugTripped())
             {
-              if (vecRegs_.partialSegUpdate_)
+              if (vecRegs_.partialSegStore_)
                 if (not writeForStore(faddr, pa1, pa2, val))
                   assert(0 && "Error: Assertion failed");
               ldStInfo.setLastElem(pa1, pa2, val);
@@ -2829,7 +2829,7 @@ Hart<URV>::vectorStoreSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
           else
             {
               ldStInfo.removeLastElem();
-              if (not vecRegs_.partialSegUpdate_)
+              if (not vecRegs_.partialSegStore_)
                 while (not ldStInfo.elems_.empty() and ldStInfo.elems_.back().ix_ == ix)
                   ldStInfo.removeLastElem();
               markVsDirty();
@@ -2842,7 +2842,7 @@ Hart<URV>::vectorStoreSegIndexed(const DecodedInst* di, ElementWidth offsetEew,
 
       // If we get here, no exception was encoutered, update all the fields if not in
       // partial-update.
-      if (not vecRegs_.partialSegUpdate_)
+      if (not vecRegs_.partialSegStore_)
         {
           for (const auto& elem : ldStInfo.elems_)
             {
