@@ -180,8 +180,10 @@ namespace WdRiscv
     /// instructions.  Both instructions must be retired.
     bool overlaps(const McmInstr& other) const
     {
-      // A non-successful store conditional (zero size) does not overlap anything.
+      // A non-successful SC or AMOCAS (zero size) does not overlap anything.
       if ((di_.isSc() and size_ == 0) or (other.di_.isSc() and other.size_ == 0))
+	return false;
+      if ((di_.isAmocas() and size_ == 0) or (other.di_.isAmocas() and other.size_ == 0))
 	return false;
 
       if (size_ == 0 or other.size_ == 0)
