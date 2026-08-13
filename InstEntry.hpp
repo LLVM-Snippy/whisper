@@ -340,7 +340,7 @@ namespace WdRiscv
     {
       if (not isAmo())
 	return 0;
-      return ((code_ >> 12) & 7) == 2 ? 4 : 8;
+      return 1 << ((code_ >> 12) & 7);
     }
 
     /// Return the size with which the immediate bits are to be (left)shifted
