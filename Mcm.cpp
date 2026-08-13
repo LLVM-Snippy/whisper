@@ -1150,6 +1150,10 @@ bool
 Mcm<URV>::retireCmo(Hart<URV>& hart, McmInstr& instrB)
 {
   uint64_t vaddr = 0, paddr = 0;
+  auto id = instrB.di_.instId();
+  if (id == InstId::prefetch_i or id == InstId::prefetch_r or id == InstId::prefetch_w)
+    return true;
+
   if (not hart.lastCmo(vaddr, paddr))
     assert(0 && "Error: Assertion failed");
 
@@ -1164,7 +1168,7 @@ Mcm<URV>::retireCmo(Hart<URV>& hart, McmInstr& instrB)
   unsigned hartIx = hart.sysHartIndex();
   auto& undrained = hartData_.at(hartIx).undrainedStores_;
 
-  if (instrB.di_.instId() == InstId::cbo_zero)
+  if (id == InstId::cbo_zero)
     {
       instrB.isStore_ = true;  // To enable forwarding
       instrB.complete_ = checkStoreComplete(hartIx, instrB);

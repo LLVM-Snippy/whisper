@@ -2556,19 +2556,19 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
               }
             else if (funct3 == 6)
 	      {
-		if (op0 != 0) return instTable_.getEntry(InstId::ori);
+                if (rvzicbop_ and op0 == 0)
+                  {
+                    unsigned rs2 = iform.rs2();
+                    if (rs2 == 0 or rs2 == 1 or rs2 == 3)
+                      {
+                        op0 = iform.fields.rs1;
+                        op1 = iform.immed() >> 5;
+                        if (iform.rs2() == 0) return instTable_.getEntry(InstId::prefetch_i);
+                        if (iform.rs2() == 1) return instTable_.getEntry(InstId::prefetch_r);
+                        if (iform.rs2() == 3) return instTable_.getEntry(InstId::prefetch_w);
+                      }
+                  }
 
-#if 0
-		unsigned rs2 = iform.rs2();
-		if (rs2 == 0 or rs2 == 1 or rs2 == 3)
-		  {
-		    op0 = iform.fields.rs1;
-		    op1 = iform.immed() >> 5;
-		    if (iform.rs2() == 0) return instTable_.getEntry(InstId::prefetch_i);
-		    if (iform.rs2() == 1) return instTable_.getEntry(InstId::prefetch_r);
-		    if (iform.rs2() == 3) return instTable_.getEntry(InstId::prefetch_w);
-		  }
-#endif
 		return instTable_.getEntry(InstId::ori);
 	      }
             else if (funct3 == 7)  return instTable_.getEntry(InstId::andi);

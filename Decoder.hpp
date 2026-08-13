@@ -60,6 +60,11 @@ namespace WdRiscv
     void enableRv64(bool flag)
     { rv64_ = flag; }
 
+    /// Enable/disable the prefetch instructions (these are variants of the ori
+    /// instruction).
+    void enableRvzicbop(bool flag)
+    { rvzicbop_ = flag; }
+
     /// Return true if rv64 is enabled.
     bool isRv64() const
     { return rv64_; }
@@ -127,6 +132,7 @@ namespace WdRiscv
     InstTable instTable_;
     bool rv64_ = false;
     bool rvzclsd_ = false;
+    bool rvzicbop_ = false;    // Rvzicbop: prefetch instructions.
   };
 }
 
