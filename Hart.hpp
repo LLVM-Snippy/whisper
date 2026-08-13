@@ -3291,11 +3291,21 @@ namespace WdRiscv
       entry.addr_ = addr;
       entry.size_ = size;
 
-      uint32_t opcode = 0;
-      memory_.readInst(addr, opcode);
-      fetchCache_->read<uint32_t>(addr, opcode);
+      if (size == 2)
+       {
+          uint16_t opcode = 0;
+          memory_.readInst(addr, opcode);
+          fetchCache_->read<uint16_t>(addr, opcode);
+          entry.opcode_ = opcode;
+        }
+      else
+        {
+          uint32_t opcode = 0;
+          memory_.readInst(addr, opcode);
+          fetchCache_->read<uint32_t>(addr, opcode);
+          entry.opcode_ = opcode;
+        }
 
-      entry.opcode_ = opcode;
       mcmOpcodes_[tag] = entry;
       return true;
     }
