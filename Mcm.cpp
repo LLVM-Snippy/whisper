@@ -1127,6 +1127,19 @@ Mcm<URV>::retireStore(Hart<URV>& hart, McmInstr& instr)
       instr.physAddr2_ = paddr2;
       instr.storeData_ = value;
       instr.isStore_ = true;
+
+      // Handle amocas.q
+      if (stSize > 8)
+        {
+          assert(stSize == 16);
+          assert(paddr == paddr2);  // Amocas.q must not cross page boundary
+          uint64_t va = 0, pa = 0;
+          if (not hart.lastAmocas_q(va, pa, instr.storeData_, instr.storeData2_))
+            assert(0);
+          assert(va == instr.virtAddr_);
+          assert(pa == instr.physAddr_);
+        }
+
       instr.complete_ = checkStoreComplete(hartIx, instr);
     }
 
@@ -1885,11 +1898,22 @@ Mcm<URV>::checkRtlWrite(unsigned hartId, const McmInstr& instr,
       return false;
     }
 
+  assert(op.size_ <= 8);
   uint64_t data = instr.storeData_;
 
-  if (op.size_ < instr.size_)
+  if (instr.di_.instId() == InstId::cbo_zero)
+    ;
+  else if (instr.size_ > 8)    // Handle amocas.q
     {
-      uint64_t shift = (op.pa_ - instr.physAddr_) * 8;
+      assert(instr.size_ == 16);
+      assert(instr.physAddr_ == instr.physAddr2_);  // Amocas.q cannot cross page boundary
+      if (op.pa_ >= instr.physAddr_ + 8)
+        data = instr.storeData2_;
+    }
+  else if (op.size_ < instr.size_)
+    {
+      // This works even if the store crosses a page boundary.
+      uint64_t shift = ((op.pa_ - instr.physAddr_) * 8) % 64;
       data = data >> shift;
       shift = 64 - op.size_*8;
       data = (data << shift) >> shift;

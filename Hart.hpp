@@ -1282,6 +1282,20 @@ namespace WdRiscv
       return ldStWrite_ ? ldStSize_ : 0;
     }
 
+    /// Set pa/va/low/high tthe the addresses and data of the last successful amocas_q
+    /// instruction returning true on success. Return false if the last executed instruction
+    /// was not a successful amocas_q instruction.
+    bool lastAmocas_q(uint64_t& va, uint64_t& pa, uint64_t& low, uint64_t& high) const
+    {
+      if (not ldStWrite_ or ldStSize_ != 16)
+        return false;
+      va = ldStAddr_;
+      pa = ldStPhysAddr1_;
+      low = ldStData_;
+      high = ldStData2_;
+      return true;
+    }
+
     bool lastAmocasSuccessful() const
     { return ldStWrite_ and ldStAtomic_ and ldStSize_ > 0; }
 

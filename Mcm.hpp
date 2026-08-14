@@ -117,6 +117,7 @@ namespace WdRiscv
     uint64_t physAddr_ = 0;   // Physical data address for ld/st instruction.
     uint64_t physAddr2_ = 0;  // Additional data address for page crossing stores.
     uint64_t storeData_ = 0;  // Model (whisper) Data for sore instructions.
+    uint64_t storeData2_ = 0; // Model (whisper) Data for upper 8 bytes of amocas_q.
 
     uint64_t addrTime_ = 0;   // Time address register was produced (for ld/st/amo).
     uint64_t dataTime_ = 0;   // Time data register was produced (for st/amo).
