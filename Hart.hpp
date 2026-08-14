@@ -6811,6 +6811,7 @@ namespace WdRiscv
     uint64_t ldStPhysAddr2_ = 0;    // Physical address of 2nd page across page boundary.
     unsigned ldStSize_ = 0;         // Non-zero if ld/st/atomic.
     uint64_t ldStData_ = 0;         // For tracing
+    uint64_t ldStData2_ = 0;        // For amocas.q
     uint64_t ldStFaultAddr_ = 0;
     Pma ldStPma1_{};                // Pma of last ld/st, this is for cosim check.
     Pma ldStPma2_{};                // Pma of 2nd page of last ld/st if page crosser.
