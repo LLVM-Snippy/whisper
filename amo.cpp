@@ -1406,7 +1406,7 @@ Hart<uint64_t>::execAmocas_q(const DecodedInst* di)
           ldStData2_ = rs2Val1;
         }
     }
-  if (storeOk and not breakpOrEnterDebugTripped())
+  if (storeOk and not breakpOrEnterDebugTripped() and rd != 0)
     {
       intRegs_.write(rd, lval0);
       intRegs_.write(rd+1, lval1);
