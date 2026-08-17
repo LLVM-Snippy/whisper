@@ -1942,7 +1942,7 @@ CsRegs<URV>::enableSsdbltrp(bool flag)
   // is not present.
   auto mtval2 = findCsr(CN::MTVAL2);
   if (mtval2)
-    mtval2->setImplemented(flag);
+    mtval2->setImplemented(flag or hyperEnabled_);
 
   // sstatus is a restricted view of mstatus; its readMask must also expose SDT
   // so that "csrr t0, sstatus" returns the current SDT value (supervisor.adoc
