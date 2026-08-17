@@ -570,6 +570,7 @@ Hart<URV>::vsetvl(unsigned rd, unsigned rs1, URV vtypeVal, bool vli /* vsetvli i
 	      // to vsetvl & vsetvli. The instructions are implemented by different
 	      // tribes. One tribe takes an exception, the other legalizes (trims) VL.
 	      unsigned prevVlmax = vecRegs_.vlmax();
+              vill = vill or not vecRegs_.legalConfig();  // Take previous vill into consideration per spec.
 	      if (vlmax != prevVlmax and not vill)
 		{
 		  auto trim = vli? vecRegs_.legalizeVsetvliAvl_ : vecRegs_.legalizeVsetvlAvl_;
