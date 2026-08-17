@@ -2026,15 +2026,16 @@ Hart<URV>::vectorLoadSeg(const DecodedInst* di, ElementWidth eew,
                   initiateLoadException(di, cause, ldStFaultAddr_, gpa1);
                   return false;
                 }
+
+              // We reduce VL before processing tail elements. This is allowed by the spec
+              // (items between old VL and new VL can be updated with arbitrary values
+              // according to the spec).
+              pokeCsr(CsrNumber::VL, ix);
+              recordCsrWrite(CsrNumber::VL);
+              vecRegs_.elemCount(ix);  // Update cached value of VL.
+
 	      if (vecRegs_.isTailAgnostic() and vecRegs_.isTailAgnosticOnes())
 		{
-		  // We reduce VL before processing tail elements. This is allowed
-		  // by the spec (items between old VL and new VL can be updated
-		  // with arbitrary values according to the spec).
-                  pokeCsr(CsrNumber::VL, ix);
-                  recordCsrWrite(CsrNumber::VL);
-                  vecRegs_.elemCount(ix);  // Update cached value of VL.
-
 		  // Fill tail elements with all-ones if so configured.
 		  ELEM_TYPE ones = ~ ELEM_TYPE{0};
 		  for (unsigned ti = vecRegs_.elemCount(); ti < elemMax; ti++)
