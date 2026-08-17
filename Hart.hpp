@@ -1282,6 +1282,20 @@ namespace WdRiscv
       return ldStWrite_ ? ldStSize_ : 0;
     }
 
+    /// Set pa/va/low/high tthe the addresses and data of the last successful amocas_q
+    /// instruction returning true on success. Return false if the last executed instruction
+    /// was not a successful amocas_q instruction.
+    bool lastAmocas_q(uint64_t& va, uint64_t& pa, uint64_t& low, uint64_t& high) const
+    {
+      if (not ldStWrite_ or ldStSize_ != 16)
+        return false;
+      va = ldStAddr_;
+      pa = ldStPhysAddr1_;
+      low = ldStData_;
+      high = ldStData2_;
+      return true;
+    }
+
     bool lastAmocasSuccessful() const
     { return ldStWrite_ and ldStAtomic_ and ldStSize_ > 0; }
 
@@ -3291,11 +3305,21 @@ namespace WdRiscv
       entry.addr_ = addr;
       entry.size_ = size;
 
-      uint32_t opcode = 0;
-      memory_.readInst(addr, opcode);
-      fetchCache_->read<uint32_t>(addr, opcode);
+      if (size == 2)
+       {
+          uint16_t opcode = 0;
+          memory_.readInst(addr, opcode);
+          fetchCache_->read<uint16_t>(addr, opcode);
+          entry.opcode_ = opcode;
+        }
+      else
+        {
+          uint32_t opcode = 0;
+          memory_.readInst(addr, opcode);
+          fetchCache_->read<uint32_t>(addr, opcode);
+          entry.opcode_ = opcode;
+        }
 
-      entry.opcode_ = opcode;
       mcmOpcodes_[tag] = entry;
       return true;
     }
@@ -6801,6 +6825,7 @@ namespace WdRiscv
     uint64_t ldStPhysAddr2_ = 0;    // Physical address of 2nd page across page boundary.
     unsigned ldStSize_ = 0;         // Non-zero if ld/st/atomic.
     uint64_t ldStData_ = 0;         // For tracing
+    uint64_t ldStData2_ = 0;        // For amocas.q
     uint64_t ldStFaultAddr_ = 0;
     Pma ldStPma1_{};                // Pma of last ld/st, this is for cosim check.
     Pma ldStPma2_{};                // Pma of 2nd page of last ld/st if page crosser.

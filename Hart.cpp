@@ -805,6 +805,7 @@ Hart<URV>::processExtensions(bool verbose)
     {
       if (isa_.isEnabled(RvExtension::Zcf))
         std::cerr << "Warning: Zcf extension enabled in Rv64\n";
+      virtMem_.enableRsw60t59b(isa_.isEnabled(RvExtension::Svrsw60t59b));
     }
   else
     {
@@ -1031,6 +1032,8 @@ Hart<URV>::reset(bool resetMemoryMappedRegs)
 
   decoder_.enableRv64(isRv64());
   decoder_.enableRvzclsd(isRvzclsd());
+  decoder_.enableRvzicbop(isRvzicbop());
+
   disas_.enableRv64(isRv64());
 
   // Reflect initial state of menvcfg CSR on pbmt and sstc.

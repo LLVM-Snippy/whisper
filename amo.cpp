@@ -1285,10 +1285,77 @@ Hart<uint64_t>::execAmocas_q(const DecodedInst* di)
       return;
     }
 
-  // FIX: This needs to be fixed for correct tracing
-  uint64_t pa1 = 0, gpa1 = 0;
-  uint64_t temp1 = 0; // Value loaded by 1st amoLoad.
-  if (not amoLoad<int64_t>(di, vaddr, attrib, pa1, gpa1, temp1))
+  uint64_t pa = 0, gpa = 0;
+
+  // This is equivalent to amoload<uint128_t>
+  bool loadOk = true;
+
+  ldStAddr_ = vaddr;   // For reporting load addr in trace-mode.
+  ldStFaultAddr_ = vaddr;
+  ldStPhysAddr1_ = ldStAddr_;
+  ldStPhysAddr2_ = ldStAddr_;
+  ldStSize_ = 16;
+  ldStAtomic_ = true;
+  ldStWrite_ = false;   // Will change this later if amocas.q is successful.
+
+  uint64_t lval0 = 0, lval1 = 0;  // Loaded values.
+
+  if (hasActiveTrigger())
+    {
+      uint64_t pmval = applyPointerMask(vaddr, true /*isLoad*/);
+      bool hit = ldStAddrTriggerHit(pmval, ldStSize_, TriggerTiming::Before, true /*isLoad*/);
+
+      uint64_t pmvas = applyPointerMask(vaddr, false /*isLoad*/);
+      if (ldStAddrTriggerHit(pmvas, ldStSize_, TriggerTiming::Before, false /*isLoad*/))
+        if (hit)
+          ldStFaultAddr_ = pmval;  // Just in case the load side also hit.
+    }
+
+  if (breakpOrEnterDebugTripped())
+    loadOk = false;
+  else
+    {
+      pa = gpa = vaddr;
+      auto cause = validateAmoAddr(pa, gpa, ldStSize_);
+      ldStPhysAddr1_ = pa;
+      ldStPhysAddr2_ = pa;
+
+      if (cause == ExceptionCause::NONE)
+        {
+          Pma pma = pmaMgr_.accessPma(pa);
+          // Check for non-cacheable pbmt
+          pma = overridePmaWithPbmt(pma, virtMem_.lastEffectivePbmt());
+          if (not pma.hasAttrib(attrib))
+            cause = ExceptionCause::STORE_ACC_FAULT;
+        }
+
+      if (cause != ExceptionCause::NONE)
+        {
+          vaddr = applyPointerMask(vaddr, false);
+          initiateStoreException(di, cause, vaddr, gpa);
+          loadOk = false;
+        }
+      else
+        {
+          bool hasOooVal0 = false, hasOooVal1 = false;
+          unsigned dsize = sizeof(lval0);  // double word size, same size for lval1. 
+
+          if (ooo_)   // Out of order execution (mcm or perfApi)
+            {
+              bool isVec = false;
+              hasOooVal0 = getOooLoadValue(vaddr, pa, pa, dsize, isVec, lval0);
+              hasOooVal1 = getOooLoadValue(vaddr, pa+dsize, pa+dsize, dsize, isVec, lval1);
+            }
+
+          if (not hasOooVal0)
+            memRead(pa, pa, lval0);
+
+          if (not hasOooVal1)
+            memRead(pa+dsize, pa+dsize, lval1);
+        }
+    }
+
+  if (not loadOk)
     return;
 
   // Address translation done. We should not be crossing a page boundary if atomic granule
@@ -1297,48 +1364,52 @@ Hart<uint64_t>::execAmocas_q(const DecodedInst* di)
     {
       using EC = ExceptionCause;
 
-      auto pma = accessPma(pa1);
+      auto pma = accessPma(pa);
       pma = overridePmaWithPbmt(pma, virtMem_.lastEffectivePbmt());
       if (auto mag = pma.misalAtomicGranule(); mag)
         {
           assert(mag <= pageSize());
           auto mask = ~uint64_t(mag - 1);
-          if ((pa1 & mask) == ((pa1 + 16 - 1) & mask))
+          if ((pa & mask) == ((pa + ldStSize_ - 1) & mask))
             cause = EC::NONE;
         }
       if (cause != EC::NONE)
         {
-          initiateStoreException(di, cause, vaddr, gpa1);
+          initiateStoreException(di, cause, vaddr, gpa);
           return;
         }
     }
 
-  uint64_t pa2 = 0, gpa2 = 0;
-  uint64_t temp2 = 0;
-  if (not amoLoad<int64_t>(di, vaddr + 8, attrib, pa2, gpa2, temp2))
-    return;
-
-  uint64_t rs2Val1 = intRegs_.read(rs2);
-  uint64_t rs2Val2 = intRegs_.read(rs2 + 1);
-  uint64_t rdVal1 = intRegs_.read(rd);
-  uint64_t rdVal2 = intRegs_.read(rd + 1);
+  uint64_t rs2Val0 = intRegs_.read(rs2);
+  uint64_t rs2Val1 = intRegs_.read(rs2 + 1);
+  uint64_t rdVal0 = intRegs_.read(rd);
+  uint64_t rdVal1 = intRegs_.read(rd + 1);
   if (rs2 == 0)
-    rs2Val1 = rs2Val2 = 0;
+    rs2Val0 = rs2Val1 = 0;
   if (rd == 0)
-    rdVal1 = rdVal2 = 0;
+    rdVal0 = rdVal1 = 0;
 
   bool storeOk = true;
-  if (temp1 == rdVal1 and temp2 == rdVal2)
+  if (lval0 == rdVal0 and lval1 == rdVal1)
     {
-      storeOk = store<uint64_t>(di, vaddr, rs2Val1, false);
-      assert(pa2 == pa1 + 8);
-      storeOk = storeOk and store<uint64_t>(di, vaddr + 8, rs2Val2, false);
-    }
+      bool ok0 = store<uint64_t>(di, vaddr, rs2Val0, false);
+      bool ok1 = store<uint64_t>(di, vaddr + 8, rs2Val1, false);
+      assert(ok0 == ok1);
+      storeOk = ok0 and ok1;
 
-  if (storeOk and not breakpOrEnterDebugTripped() and rd != 0)
+      if (storeOk)
+        {
+          ldStAddr_ = vaddr;
+          ldStPhysAddr1_ = ldStPhysAddr2_ = pa;
+          ldStSize_ = 16;
+          ldStData_ = rs2Val0;
+          ldStData2_ = rs2Val1;
+        }
+    }
+  if (storeOk and not breakpOrEnterDebugTripped())
     {
-      intRegs_.write(rd, temp1);
-      intRegs_.write(rd+1, temp2);
+      intRegs_.write(rd, lval0);
+      intRegs_.write(rd+1, lval1);
     }
 }
 

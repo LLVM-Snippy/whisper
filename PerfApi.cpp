@@ -40,6 +40,32 @@ static inline bool isNonForwardableCsr(unsigned csrNum)
     }
 }
 
+// True if hardware can update csrNum without an instruction writing it, so a read at speculative
+// execute and a read at retire may legitimately differ. See the use site in retire().
+//
+// Do not add: MTOPEI/STOPEI/VSTOPEI (reading them *claims* the interrupt -- not passive reads);
+// SEED (fresh entropy per read, so no sample can be reproduced); MSTATUS/SSTATUS (FS/VS/SD do
+// drift, but both are written often and a forced rd would mask a write's real divergence).
+static inline bool isAsyncUpdatedCsr(unsigned csrNum)
+{
+  using CN = WdRiscv::CsrNumber;
+  auto inRange = [&](CN lo, CN hi) { return csrNum >= unsigned(lo) and csrNum <= unsigned(hi); };
+
+  switch (WdRiscv::CsrNumber(csrNum))
+    {
+    case CN::MIP:   case CN::SIP:   case CN::VSIP:      // interrupt-pending, set by hardware
+    case CN::HIP:   case CN::HVIP:  case CN::MVIP:
+    case CN::MTOPI: case CN::STOPI: case CN::VSTOPI:    // AIA top interrupt, recomputed
+    case CN::SCOUNTOVF:                                 // Sscofpmf overflow (sets MIP.LCOFIP)
+      return true;
+    default:                                            // free-running counters, one block each
+      return inRange(CN::CYCLE,   CN::HPMCOUNTER31)  or   // 0xc00-0xc1f  cycle/time/instret/hpm
+             inRange(CN::CYCLEH,  CN::HPMCOUNTER31H) or   // 0xc80-0xc9f  RV32 high halves
+             inRange(CN::MCYCLE,  CN::MHPMCOUNTER31) or   // 0xb00-0xb1f  machine
+             inRange(CN::MCYCLEH, CN::MHPMCOUNTER31H);    // 0xb80-0xb9f  machine, RV32 high
+    }
+}
+
 // True if csrNum is an AIA/Smcsrind indirect data window (MIREG*/SIREG*/VSIREG*): a CSR with no
 // storage of its own that aliases whichever register its addressing context selects.
 static inline bool isIndirectCsrWindow(unsigned csrNum)
@@ -874,12 +900,25 @@ PerfApi<URV>::retire(unsigned hartIx, uint64_t time, uint64_t tag,
   if (di.isCsr() and di.op0() != 0)
     {
       unsigned csrNum = di.op2();
-      // Force the value we saw at exec for CSRs that can change between execute and retire:
-      // - MCYCLE: cycle counter keeps incrementing
-      // - TIME: timer keeps incrementing
-      // - FFLAGS/FCSR: FP exception flags accumulate from other FP instructions
+
+      // Hardware updates some CSRs on its own, so retire()'s re-read yields a different rd than
+      // execute() sampled. Force the execute-time value: both samples are architecturally valid
+      // (the read simply happened earlier), and a stale rd is otherwise invisible here --
+      // checkExecVsRetire() exempts CSR ops -- until it aborts the run on the first dependent
+      // non-CSR instruction. OpenSBI pmu_ctr_start_hw() reads mip and branches on LCOFIP two
+      // instructions later, tripping the compare on the intervening slli.
+      //
+      // Read forms only (csrrs/csrrc rs1=x0, csrrsi/csrrci imm=0): on a write the execute-time
+      // value is a prediction whose divergence is a real CsrMispredict, reconciled below.
+      // FFLAGS/FCSR (flags accumulate from other FP ops) and MCYCLE/TIME predate this and stay
+      // forced for every form.
+      //
+      // TODO(revisit): this makes the execute-time sample authoritative, a perf-api contract
+      // choice -- a client sampling these non-speculatively wants the retire-time value instead.
+      const bool readForm = di.effectiveIthOperandMode(2) != WdRiscv::OperandMode::ReadWrite;
       if (csrNum == unsigned(CN::MCYCLE) or csrNum == unsigned(CN::TIME) or
-          csrNum == unsigned(CN::FFLAGS) or csrNum == unsigned(CN::FCSR))
+          csrNum == unsigned(CN::FFLAGS) or csrNum == unsigned(CN::FCSR) or
+          (readForm and isAsyncUpdatedCsr(csrNum)))
         {
           hart.pokeIntReg(di.op0(), URV(packet.destValues_.at(0).second.scalar));
         }

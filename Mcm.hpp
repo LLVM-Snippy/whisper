@@ -117,6 +117,7 @@ namespace WdRiscv
     uint64_t physAddr_ = 0;   // Physical data address for ld/st instruction.
     uint64_t physAddr2_ = 0;  // Additional data address for page crossing stores.
     uint64_t storeData_ = 0;  // Model (whisper) Data for sore instructions.
+    uint64_t storeData2_ = 0; // Model (whisper) Data for upper 8 bytes of amocas_q.
 
     uint64_t addrTime_ = 0;   // Time address register was produced (for ld/st/amo).
     uint64_t dataTime_ = 0;   // Time data register was produced (for st/amo).
@@ -180,8 +181,10 @@ namespace WdRiscv
     /// instructions.  Both instructions must be retired.
     bool overlaps(const McmInstr& other) const
     {
-      // A non-successful store conditional (zero size) does not overlap anything.
+      // A non-successful SC or AMOCAS (zero size) does not overlap anything.
       if ((di_.isSc() and size_ == 0) or (other.di_.isSc() and other.size_ == 0))
+	return false;
+      if ((di_.isAmocas() and size_ == 0) or (other.di_.isAmocas() and other.size_ == 0))
 	return false;
 
       if (size_ == 0 or other.size_ == 0)

@@ -457,6 +457,12 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
       formatInstTrace<URV>(out, tag, *this, instSV, 'm',
                            URV(ldStAddr_), URV(ldStData_), tmp);
       pending = true;
+      if (ldStSize_ == 16)   // amocas.q
+        {
+          fprintf(out, "  +\n");
+          formatInstTrace<URV>(out, tag, *this, instSV, 'm',
+                               URV(ldStAddr_+8), URV(ldStData2_), tmp);
+        }
     }
 
   // Process CSR diffs.

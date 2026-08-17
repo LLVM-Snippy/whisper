@@ -2551,26 +2551,24 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
                 if (top5 == 0xc)  return instTable_.getEntry(InstId::rori);
                 if (imm == 0x687) return instTable_.getEntry(InstId::brev8);
 		if (imm == 0x08f) return instTable_.getEntry(InstId::unzip);
-
-		bool i64 = isRv64(), i32 = not isRv64();
-		if (i64 and imm == 0x6b8)  return instTable_.getEntry(InstId::rev8_64);
-		if (i32 and imm == 0x698)  return instTable_.getEntry(InstId::rev8_32);
+		if (imm == 0x6b8) return instTable_.getEntry(InstId::rev8_64);
+		if (imm == 0x698) return instTable_.getEntry(InstId::rev8_32);
               }
             else if (funct3 == 6)
 	      {
-		if (op0 != 0) return instTable_.getEntry(InstId::ori);
+                if (rvzicbop_ and op0 == 0)
+                  {
+                    unsigned rs2 = iform.rs2();
+                    if (rs2 == 0 or rs2 == 1 or rs2 == 3)
+                      {
+                        op0 = iform.fields.rs1;
+                        op1 = iform.immed() >> 5;
+                        if (iform.rs2() == 0) return instTable_.getEntry(InstId::prefetch_i);
+                        if (iform.rs2() == 1) return instTable_.getEntry(InstId::prefetch_r);
+                        if (iform.rs2() == 3) return instTable_.getEntry(InstId::prefetch_w);
+                      }
+                  }
 
-#if 0
-		unsigned rs2 = iform.rs2();
-		if (rs2 == 0 or rs2 == 1 or rs2 == 3)
-		  {
-		    op0 = iform.fields.rs1;
-		    op1 = iform.immed() >> 5;
-		    if (iform.rs2() == 0) return instTable_.getEntry(InstId::prefetch_i);
-		    if (iform.rs2() == 1) return instTable_.getEntry(InstId::prefetch_r);
-		    if (iform.rs2() == 3) return instTable_.getEntry(InstId::prefetch_w);
-		  }
-#endif
 		return instTable_.getEntry(InstId::ori);
 	      }
             else if (funct3 == 7)  return instTable_.getEntry(InstId::andi);

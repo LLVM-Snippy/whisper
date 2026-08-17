@@ -128,6 +128,7 @@ namespace WdRiscv
     Zvfqwdota8f,
     Zvfqwbdota8f,
     Zvfwbdota16bf,
+    Svrsw60t59b,
     None
   };
 
