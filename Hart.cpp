@@ -805,6 +805,7 @@ Hart<URV>::processExtensions(bool verbose)
     {
       if (isa_.isEnabled(RvExtension::Zcf))
         std::cerr << "Warning: Zcf extension enabled in Rv64\n";
+      virtMem_.enableRsw60t59b(isa_.isEnabled(RvExtension::Svrsw60t59b));
     }
   else
     {
