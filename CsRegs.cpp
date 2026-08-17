@@ -4137,6 +4137,9 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
 
       bool adue = menvcfgAdue();
       enableHenvcfgAdue(adue);
+
+      bool dte = menvcfgDte();
+      enableSsdbltrp(dte);
     }
   else if ((num >= CN::MHPMEVENT3 and num <= CN::MHPMEVENT31) or
            (num >= CN::MHPMEVENT3H and num <= CN::MHPMEVENT31H))

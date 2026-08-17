@@ -2516,6 +2516,18 @@ namespace WdRiscv
       return fields.bits_.CDE;
     }
 
+    /// Return the DTE bit of MENVCFG CSR.  Double trap enable.
+    bool menvcfgDte()
+    {
+      // Read MENVCFG in RV64 and MENCCFGH:HENCCFG in RV32.
+      uint64_t value = 0;
+      if (not read64(CsrNumber::MENVCFG, value))
+        return false;
+
+      MenvcfgFields<uint64_t> fields(value);
+      return fields.bits_.DTE;
+    }
+
     /// Return the PMM bits of MSECCFG CSR. Returns 0
     /// if not implemented.
     uint8_t mseccfgPmm()
