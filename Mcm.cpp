@@ -1128,32 +1128,41 @@ Mcm<URV>::retireStore(Hart<URV>& hart, McmInstr& instr)
       instr.storeData_ = value;
       instr.isStore_ = true;
 
-      // Handle amocas.q
-      if (stSize > 8)
+      if (instr.di_.isAmocas())
         {
-          assert(stSize == 16);
-          assert(paddr == paddr2);  // Amocas.q must not cross page boundary
-          uint64_t va = 0, pa = 0;
-          if (not hart.lastAmocas_q(va, pa, instr.storeData_, instr.storeData2_))
-            assert(0);
-          assert(va == instr.virtAddr_);
-          assert(pa == instr.physAddr_);
+          if (stSize == 0)
+            instr.isStore_ = false;  // Failed amocas
+          else if (instr.di_.instId() == InstId::amocas_q)
+            {
+              uint64_t va = 0, pa = 0;
+              if (hart.lastAmocas_q(va, pa, instr.storeData_, instr.storeData2_))
+                {
+                  assert(stSize == 16);
+                  assert(paddr == paddr2);  // Amocas.q must not cross page boundary
+                  assert(va == instr.virtAddr_);
+                  assert(pa == instr.physAddr_);
+                }
+            }
         }
 
-      instr.complete_ = checkStoreComplete(hartIx, instr);
+      if (instr.isStore_)
+        instr.complete_ = checkStoreComplete(hartIx, instr);
     }
 
   bool ok = checkStoreData(hart, instr);
 
   auto& undrained = hartData_.at(hartIx).undrainedStores_;
 
-  if (not instr.complete_)
+  if (instr.isStore_ and not instr.complete_)
     {
       undrained.insert(instr.tag_);
       return ok;
     }
 
-  undrained.erase(instr.tag_);
+  // If store is complete or if we have an unsuccessful amocas, mark as drained.
+  if (not instr.isStore_ or instr.complete_)
+    undrained.erase(instr.tag_);
+
   return ok;
 }
 
@@ -1879,9 +1888,9 @@ Mcm<URV>::checkRtlWrite(unsigned hartId, const McmInstr& instr,
     {
       cerr << "Error: Hart-id=" << hartId << " time=" << op.time_ << " tag="
            << instr.tag_;
-      if (instr.di_.isSc())
+      if (instr.di_.isSc() or instr.di_.isAmocas())
         cerr << " merge buffer " << (op.bypass_ ? "bypass" : "insert")
-             << " operation for a non-successful store-conditional instruction\n";
+             << " operation for a non-successful store-conditional/amocas instruction\n";
       else
         cerr << " merge buffer insert/bypass for a non-store instruction\n";
 
@@ -4363,7 +4372,7 @@ Mcm<URV>::ppoRule5(Hart<URV>& hart, const McmInstr& instrA, const McmInstr& inst
   if (not hasAcquire)
     return true;
 
-  if (instrA.di_.isAmo())
+  if (instrA.di_.isAmo() and not instrA.di_.isAmocas())
     return instrA.memOps_.size() == 2; // Fail if != 2: Incomplete AMO might finish afrer B
 
   if (not instrA.complete_)
@@ -4524,7 +4533,7 @@ Mcm<URV>::ppoRule6(Hart<URV>& hart, const McmInstr& instrA, const McmInstr& inst
 
   assert(instrA.isRetired());
 
-  if (instrA.di_.isAmo())
+  if (instrA.di_.isAmo() and not instrA.di_.isAmocas())
     return instrA.memOps_.size() == 2; // Fail if incomplete AMO (finishes afrer B).
 
   if (not instrA.complete_)
