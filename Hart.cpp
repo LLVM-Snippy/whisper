@@ -13269,7 +13269,8 @@ Hart<URV>::doCsrWrite(const DecodedInst* di, CsrNumber csr, URV val,
     if (minstretEnabled())
       minstret_++;
   if (csr == CsrNumber::MCYCLE or csr == CsrNumber::MCYCLEH)
-    cycleCount_++;
+    if (mcycleEnabled())
+      cycleCount_++;
 
   updatePerformanceCountersForCsr(*di);
 
@@ -13374,7 +13375,8 @@ Hart<URV>::doCsrWrite(const DecodedInst* di, CsrNumber csr, URV val,
 
   // Same for mcycle.
   if (csr == CsrNumber::MCYCLE or csr == CsrNumber::MCYCLEH)
-    cycleCount_--;
+    if (mcycleEnabled())
+      cycleCount_--;
 }
 
 
