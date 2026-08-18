@@ -274,7 +274,7 @@ Session<URV>::getPrimaryConfigParameters(const Args& args, const HartConfig& con
     hartsPerCore = *args.harts;
   if (hartsPerCore == 0 or hartsPerCore > 64)
     {
-      std::cerr << "Error: Unsupported hart count: " << hartsPerCore;
+      std::cerr << "Error: Unsupported hart count: " << hartsPerCore << '\n';
       std::cerr << "Error:  (1 to 64 currently supported)\n";
       return false;
     }
