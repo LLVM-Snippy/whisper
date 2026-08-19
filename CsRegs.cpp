@@ -5237,9 +5237,13 @@ CsRegs<URV>::defineHypervisorRegs()
   csr = defineCsr("henvcfgh",    Csrn::HENVCFGH,    !mand, !imp, 0, wam, wam);
   csr->setHypervisor(true); markHighLowPair(Csrn::HENVCFGH, Csrn::HENVCFG);
 
-  // NOLINTNEXTLINE(clang-analyzer-core.UndefinedBinaryOperatorResult)
-  mask = ~(URV(0x3) << (rv32_? 29 : 58));
+  // Bits 30:29 (59:58 in rv64) are reserved so read-only-zero. Leas5 sig 2 bits also roz.
+  mask = ~(URV(0x3) << 29);
+  if constexpr (sizeof(URV) == 8)
+    mask = ~(URV(0x3) << 58);
+  mask = (mask >> 2) << 2;  // Least sig 2 bits read-only-zero.
   pokeMask = mask;
+
   csr = defineCsr("hgatp",       Csrn::HGATP,       !mand, !imp, 0, mask, pokeMask);
   csr->setHypervisor(true);
   csr = defineCsr("htimedelta",  Csrn::HTIMEDELTA,  !mand, !imp, 0, wam, wam);

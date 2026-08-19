@@ -876,8 +876,16 @@ namespace WdRiscv
     /// Print current pma map matching a particular address.
     void printPmas(std::ostream& os, uint64_t address) const
     {
+      auto pma = getPma(address);
       auto region = getRegion(address);
-      printRegion(os, region);
+      if (region.valid_)
+        {
+          os << std::hex;
+          os << "base addr: 0x" << region.firstAddr_ << "\n";
+          os << "last addr: 0x" << region.lastAddr_ << "\n";
+          os << std::dec;
+        }
+      os << "attributes: " << Pma::attributesToString(pma.attrib_) << "\n";
     }
 
     /// Print current pma map.
