@@ -1282,7 +1282,7 @@ namespace WdRiscv
       return ldStWrite_ ? ldStSize_ : 0;
     }
 
-    /// Set pa/va/low/high tthe the addresses and data of the last successful amocas_q
+    /// Set pa/va/low/high to the addresses and data of the last successful amocas_q
     /// instruction returning true on success. Return false if the last executed instruction
     /// was not a successful amocas_q instruction.
     bool lastAmocas_q(uint64_t& va, uint64_t& pa, uint64_t& low, uint64_t& high) const
