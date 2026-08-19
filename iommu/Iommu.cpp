@@ -1615,7 +1615,8 @@ Iommu::misconfiguredPc(const ProcessContext& pc, bool sxl) const
 
 bool
 Iommu::translate(const IommuRequest& req, uint64_t& pa, unsigned& cause,
-                 PteAttribs* attribs, AtsMsiInfo* msiInfo)
+                 PteAttribs* attribs, AtsMsiInfo* msiInfo,
+                 std::vector<PbmtInfo>* pbmtInfo)
 {
   cause = 0;
 
@@ -1623,7 +1624,8 @@ Iommu::translate(const IommuRequest& req, uint64_t& pa, unsigned& cause,
   uint64_t pdtFaultGpa = 0;
   bool pdtFaultIsImplicit = false;
 
-  if (translate_(req, pa, cause, dtf, pdtFaultGpa, pdtFaultIsImplicit, attribs, msiInfo))
+  if (translate_(req, pa, cause, dtf, pdtFaultGpa, pdtFaultIsImplicit, attribs, msiInfo,
+                 pbmtInfo))
     {
       if (not params_.reportExplicitPmpViolation)
         return true;
@@ -1788,7 +1790,8 @@ combineStageAttribs(const Iommu::PteAttribs& s1, const Iommu::PteAttribs& s2, bo
 bool
 Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& dtf,
                   uint64_t& pdtFaultGpa, bool& pdtFaultIsImplicit,
-                  PteAttribs* attribs, AtsMsiInfo* msiInfo)
+                  PteAttribs* attribs, AtsMsiInfo* msiInfo,
+                  std::vector<PbmtInfo>* pbmtInfo)
 {
   deviceDirWalk_.clear();
   processDirWalk_.clear();
@@ -2033,6 +2036,7 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
                           req.isExec(), sum, req.iova, dc.gade(), dc.sade(), dc.sbe(), gpa, cause,
                           attribs ? &s1Attribs : nullptr))
     return false;
+  getStage1Pbmts(pbmtInfo);
 
   // Count S/VS-stage page table walk event after successful first-stage translation
   // Extract context for event filtering (GSCID/GSCV for IDT=1 mode)
@@ -2099,6 +2103,7 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
                           req.isExec(), gpa, dc.gade(), dc.sxl(), pa, cause, false /* isPdtAccess */,
                           attribs ? &s2Attribs : nullptr))
     return false;
+  getStage2Pbmt(pbmtInfo);
 
   // Count G-stage page table walk event after successful second-stage translation
   // Reuse context variables already computed above
@@ -2116,6 +2121,65 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
 
   // 20. Translation process is complete
   return true;
+}
+
+
+void
+Iommu::getStage1Pbmts(std::vector<PbmtInfo>* pbmtInfo)
+{
+  if (not pbmtInfo)
+    return;
+
+  const auto& walks = mmu_.getDataWalks();
+
+  // Put implicit translation walk results first.
+  for (const auto& walk : walks)
+    {
+      if (walk.isStage2())
+        {
+          PbmtInfo info{ .addr = walk.result(), .pbmt = unsigned(walk.pbmt()) };
+          pbmtInfo->push_back(info);
+        }
+    }
+
+  // Put explicit stage1 walk result last.
+  for (const auto& walk : walks)
+    {
+      if (walk.isStage1())
+        {
+          PbmtInfo info{ .addr = walk.result(), .pbmt = unsigned(walk.pbmt()) };
+          pbmtInfo->push_back(info);
+        }
+    }
+}
+
+
+void
+Iommu::getStage2Pbmt(std::vector<PbmtInfo>* pbmtInfo)
+{
+  if (not pbmtInfo)
+    return;
+
+  const auto& walks = mmu_.getDataWalks();
+  if (walks.empty())
+    return;
+
+  // The last walk is the GPA to SPA walk which is what we want. We need to merge its pbmt
+  // with that of stage1. Pbmt of stage1 takes priority.
+  const auto& walk = walks.back();
+  unsigned s2pbmt = unsigned(walk.pbmt());
+
+  // The stage1 translate should have put a pbmt-info entry at end of the pbmtInfo vector
+  // corresponding to the stage1 explicit translation pbmt.
+  if (pbmtInfo->empty())
+    return;
+
+  unsigned s1pbmt = pbmtInfo->back().pbmt;
+
+  if (s1pbmt != 0)
+    return;  // Stage1 has priority
+
+  pbmtInfo->back().pbmt = s2pbmt;
 }
 
 

@@ -771,12 +771,20 @@ namespace TT_IOMMU
       uint64_t mrifAddr = 0;
     };
 
+    /// Translated address (GPA or SPA) and PBMT of corresponding leaf PTE. Used for
+    /// design verification.
+    struct PbmtInfo {
+      uint64_t addr = 0;
+      unsigned pbmt = 0;
+    };
+
     /// Perform an address translation request. Return true on success and false on fail.
     /// Report fault cause on fail. Optionally returns the combined leaf-PTE attributes
     /// (attribs) and MSI translation results (msiInfo), both used to build an ATS
     /// translation completion.
     bool translate(const IommuRequest& req, uint64_t& pa, unsigned& cause,
-                   PteAttribs* attribs = nullptr, AtsMsiInfo* msiInfo = nullptr);
+                   PteAttribs* attribs = nullptr, AtsMsiInfo* msiInfo = nullptr,
+                   std::vector<PbmtInfo>* pbmtInfo = nullptr);
 
     /// Perform an ATS (Address Translation Services) translation request. This method
     /// handles PCIe ATS Translation Requests according to RISC-V IOMMU spec section 3.6.
@@ -1222,12 +1230,23 @@ namespace TT_IOMMU
 
   protected:
 
+    /// Helper to the translate method. Collect the PBMT of the implicit access
+    /// translations done by stage1Translate. This is a no-op if info is the null pointer.
+    /// Collected PBMTs are appended to the given vector.
+    void getStage1Pbmts(std::vector<PbmtInfo>* info);
+
+    /// Helper to the translate method. Collect the PBMT of the stage2Translate.  This is
+    /// a no-op if info is the null pointer. Collected PBMT is appended to the given
+    /// vector.
+    void getStage2Pbmt(std::vector<PbmtInfo>* info);
+
     /// Helper to translate. Does translation but does not report fault cause on fail,
     /// instead, it sets cause and dtf to DC.tc.DTF.
     /// If a PDT guest fault occurs, pdtFaultGpa and pdtFaultIsImplicit are set.
     bool translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause,
                     bool& dtf, uint64_t& pdtFaultGpa, bool& pdtFaultIsImplicit,
-                    PteAttribs* attribs = nullptr, AtsMsiInfo* msiInfo = nullptr);
+                    PteAttribs* attribs = nullptr, AtsMsiInfo* msiInfo = nullptr,
+                    std::vector<PbmtInfo>* pbmtInfo = nullptr);
 
     /// Return true if given device context is mis-configured. See section 2.1.4 of IOMMMU
     /// spec.
