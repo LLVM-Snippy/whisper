@@ -5038,7 +5038,7 @@ CsRegs<URV>::defineSupervisorRegs()
   defineCsr("stvec",      Csrn::STVEC,      !mand, !imp, 0, mask, mask);
 
   mask = pokeMask = 0xffffffff;  // Only least sig 32 bits writable
-  defineCsr("scounteren", Csrn::SCOUNTEREN, !mand, !imp, 0, wam, wam);
+  defineCsr("scounteren", Csrn::SCOUNTEREN, !mand, !imp, 0, mask, pokeMask);
 
   // Supervisor Trap Handling 
   defineCsr("sscratch",   Csrn::SSCRATCH,   !mand, !imp, 0, wam, wam);
