@@ -1533,7 +1533,7 @@ CsRegs<URV>::enableSupervisorMode(bool flag)
     mask |= 4;
   auto& mce = regs_.at(unsigned(CN::MCOUNTEREN));
   auto& sce = regs_.at(unsigned(CN::SCOUNTEREN));
-  auto& hce = regs_.at(unsigned(CN::SCOUNTEREN));
+  auto& hce = regs_.at(unsigned(CN::HCOUNTEREN));
   mce.setReadMask((mce.getReadMask() & ~URV(7)) | mask);
   sce.setReadMask((sce.getReadMask() & ~URV(7)) | mask);
   hce.setReadMask((hce.getReadMask() & ~URV(7)) | mask);
@@ -2128,7 +2128,7 @@ CsRegs<URV>::enableZicntr(bool flag)
   URV mask = 7;  // Least sig 3 bits of MCOUNTEREN.
   auto& mce = regs_.at(unsigned(CN::MCOUNTEREN));
   auto& sce = regs_.at(unsigned(CN::SCOUNTEREN));
-  auto& hce = regs_.at(unsigned(CN::SCOUNTEREN));
+  auto& hce = regs_.at(unsigned(CN::HCOUNTEREN));
 
   if (flag)
     {
@@ -2164,7 +2164,7 @@ CsRegs<URV>::enableZihpm(bool flag)
   // MCOUNTEREN/SCOUNTEREN/HCOUNTEREN.
   auto& mce = regs_.at(unsigned(CN::MCOUNTEREN));
   auto& sce = regs_.at(unsigned(CN::SCOUNTEREN));
-  auto& hce = regs_.at(unsigned(CN::SCOUNTEREN));
+  auto& hce = regs_.at(unsigned(CN::HCOUNTEREN));
   URV mask = (~URV(0)) << 3;
   if (flag)
     {
