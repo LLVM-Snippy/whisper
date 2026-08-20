@@ -4764,7 +4764,8 @@ CsRegs<URV>::defineMachineRegs()
   // Same for double_trap (16) and m_mode_env_call (11).
   URV hard0 = ( (URV(1) << unsigned(ExceptionCause::M_ENV_CALL))  |
 		(URV(1) << unsigned(ExceptionCause::DOUBLE_TRAP)) |
-		(URV(1) << unsigned(ExceptionCause::RESERVED0)) );
+		(URV(1) << unsigned(ExceptionCause::RESERVED0))   |
+		(URV(1) << unsigned(ExceptionCause::RESERVED1)) );
   mask = wam & ~ hard0;
   defineCsr("medeleg", Csrn::MEDELEG, !mand, !imp, 0, mask, mask);
 
@@ -5185,6 +5186,7 @@ CsRegs<URV>::defineHypervisorRegs()
   mask = ~((URV(1) << unsigned(EC::S_ENV_CALL))               |
 	   (URV(1) << unsigned(EC::VS_ENV_CALL))              |
 	   (URV(1) << unsigned(EC::M_ENV_CALL))               |
+	   (URV(1) << unsigned(EC::DOUBLE_TRAP))              |
 	   (URV(1) << unsigned(EC::INST_GUEST_PAGE_FAULT))    |
 	   (URV(1) << unsigned(EC::LOAD_GUEST_PAGE_FAULT))    |
 	   (URV(1) << unsigned(EC::VIRT_INST))                |
@@ -5237,9 +5239,13 @@ CsRegs<URV>::defineHypervisorRegs()
   csr = defineCsr("henvcfgh",    Csrn::HENVCFGH,    !mand, !imp, 0, wam, wam);
   csr->setHypervisor(true); markHighLowPair(Csrn::HENVCFGH, Csrn::HENVCFG);
 
-  // NOLINTNEXTLINE(clang-analyzer-core.UndefinedBinaryOperatorResult)
-  mask = ~(URV(0x3) << (rv32_? 29 : 58));
+  // Bits 30:29 (59:58 in rv64) are reserved so read-only-zero. Leas5 sig 2 bits also roz.
+  mask = ~(URV(0x3) << 29);
+  if constexpr (sizeof(URV) == 8)
+    mask = ~(URV(0x3) << 58);
+  mask = (mask >> 2) << 2;  // Least sig 2 bits read-only-zero.
   pokeMask = mask;
+
   csr = defineCsr("hgatp",       Csrn::HGATP,       !mand, !imp, 0, mask, pokeMask);
   csr->setHypervisor(true);
   csr = defineCsr("htimedelta",  Csrn::HTIMEDELTA,  !mand, !imp, 0, wam, wam);

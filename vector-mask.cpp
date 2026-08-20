@@ -219,13 +219,17 @@ Hart<URV>::execVmsbf_m(const DecodedInst* di)
 	  if (vecRegs_.isMaskDestActive(vd, ix, masked, elemCount, flag))
 	    {
 	      bool input = false;
-	      if (ix < vecRegs_.elemCount())
-		vecRegs_.readMaskRegister(vs1, ix, input);
+              vecRegs_.readMaskRegister(vs1, ix, input);
 	      found = found or input;
 	      flag = not found;
 	    }
 	  vecRegs_.writeMaskRegister(vd, ix, flag);
 	}
+
+      // In case we did not compute as if vl=vlmax, fill tail bits with ones if so configured.
+      if (vecRegs_.isTailAgnosticOnes())
+        for (uint32_t ix = elemCount; ix < bitsPerReg; ++ix)
+          vecRegs_.writeMaskRegister(vd, ix, true);
 
       vecRegs_.touchMask(vd);
     }
@@ -266,13 +270,17 @@ Hart<URV>::execVmsif_m(const DecodedInst* di)
 	  if (vecRegs_.isMaskDestActive(vd, ix, masked, elemCount, flag))
 	    {
 	      bool input = false;
-	      if (ix < vecRegs_.elemCount())
-		vecRegs_.readMaskRegister(vs1, ix, input);
+              vecRegs_.readMaskRegister(vs1, ix, input);
 	      flag = not found;
 	      found = found or input;
 	    }
 	  vecRegs_.writeMaskRegister(vd, ix, flag);
 	}
+
+      // In case we did not compute as if vl=vlmax, fill tail bits with ones if so configured.
+      if (vecRegs_.isTailAgnosticOnes())
+        for (uint32_t ix = elemCount; ix < bitsPerReg; ++ix)
+          vecRegs_.writeMaskRegister(vd, ix, true);
 
       vecRegs_.touchMask(vd);
     }
@@ -316,13 +324,14 @@ Hart<URV>::execVmsof_m(const DecodedInst* di)
 	  bool active = vecRegs_.isMaskDestActive(vd, ix, masked, elemCount, flag);
 
 	  bool input = false;
-	  if (ix < vecRegs_.elemCount() and active)
-	    vecRegs_.readMaskRegister(vs1, ix, input);
 
-	  if (active)
-	    vecRegs_.writeMaskRegister(vd, ix, false);
+          if (active)
+            {
+              vecRegs_.readMaskRegister(vs1, ix, input);   // Read input.
+              vecRegs_.writeMaskRegister(vd, ix, false);   // Write 0 in oputput.
+            }
 	  else if (ones)
-	    vecRegs_.writeMaskRegister(vd, ix, true);
+	    vecRegs_.writeMaskRegister(vd, ix, true);  // Not active and all ones mask agnostic
 
 	  if (found or not input)
 	    continue;
@@ -330,6 +339,11 @@ Hart<URV>::execVmsof_m(const DecodedInst* di)
 	  found = true;
 	  vecRegs_.writeMaskRegister(vd, ix, true);
 	}
+
+      // In case we did not compute as if vl=vlmax, fill tail bits with ones if so configured.
+      if (vecRegs_.isTailAgnosticOnes())
+        for (uint32_t ix = elemCount; ix < bitsPerReg; ++ix)
+          vecRegs_.writeMaskRegister(vd, ix, true);
 
       vecRegs_.touchMask(vd);  // In case nothing was written
     }
