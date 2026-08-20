@@ -4764,7 +4764,8 @@ CsRegs<URV>::defineMachineRegs()
   // Same for double_trap (16) and m_mode_env_call (11).
   URV hard0 = ( (URV(1) << unsigned(ExceptionCause::M_ENV_CALL))  |
 		(URV(1) << unsigned(ExceptionCause::DOUBLE_TRAP)) |
-		(URV(1) << unsigned(ExceptionCause::RESERVED0)) );
+		(URV(1) << unsigned(ExceptionCause::RESERVED0))   |
+		(URV(1) << unsigned(ExceptionCause::RESERVED1)) );
   mask = wam & ~ hard0;
   defineCsr("medeleg", Csrn::MEDELEG, !mand, !imp, 0, mask, mask);
 
@@ -5185,6 +5186,7 @@ CsRegs<URV>::defineHypervisorRegs()
   mask = ~((URV(1) << unsigned(EC::S_ENV_CALL))               |
 	   (URV(1) << unsigned(EC::VS_ENV_CALL))              |
 	   (URV(1) << unsigned(EC::M_ENV_CALL))               |
+	   (URV(1) << unsigned(EC::DOUBLE_TRAP))              |
 	   (URV(1) << unsigned(EC::INST_GUEST_PAGE_FAULT))    |
 	   (URV(1) << unsigned(EC::LOAD_GUEST_PAGE_FAULT))    |
 	   (URV(1) << unsigned(EC::VIRT_INST))                |
