@@ -4534,7 +4534,8 @@ Mcm<URV>::ppoRule6(Hart<URV>& hart, const McmInstr& instrA, const McmInstr& inst
   assert(instrA.isRetired());
 
   if (instrA.di_.isAmo() and not instrA.di_.isAmocas())
-    return instrA.memOps_.size() != 2; // Fail if incomplete AMO (finishes afrer B).
+    if (instrA.memOps_.size() != 2)
+      return false; // Fail if incomplete AMO (finishes afrer B).
 
   if (not instrA.complete_)
     return false;       // Fail if incomplete store (finishes after B).
@@ -4627,19 +4628,22 @@ Mcm<URV>::ppoRule7(const McmInstr& instrA, const McmInstr& instrB) const
 
   assert(instrA.isRetired());
 
-  bool bHasRc = instrB.di_.hasRelease() or instrB.di_.hasAcquire();
-  if (isTso_)
-    bHasRc = bHasRc or instrB.di_.isLoad() or instrB.di_.isStore() or instrB.di_.isAmo();
-
-  bool aHasRc = instrA.di_.hasRelease() or instrA.di_.hasAcquire();
-  if (isTso_)
-    aHasRc = bHasRc or instrA.di_.isLoad() or instrA.di_.isStore() or instrA.di_.isAmo();
+  bool bHasRel = instrB.di_.hasRelease();
+  if (instrB.di_.isAmocas() and not instrHasWrite(instrB))
+    bHasRel = false; // Instruction B was a non-successful amocas: no release.
+  bool bHasRc = instrB.di_.hasAcquire() or bHasRel;
+  
+  bool aHasRel = instrA.di_.hasRelease();
+  if (instrA.di_.isAmocas() and not instrHasWrite(instrA))
+    aHasRel = false; // Instruction A was a non-successful amocas: no release.
+  bool aHasRc = instrA.di_.hasAcquire() or aHasRel;
 
   if (not aHasRc or not bHasRc)
     return true;
 
   if (instrA.di_.isAmo() and not instrA.di_.isAmocas())
-    return instrA.memOps_.size() != 2; // Fail if incomplete AMO (finishes afrer B).
+    if (instrA.memOps_.size() != 2)
+      return false; // Fail if incomplete AMO (finishes afrer B).
 
   if (not instrA.complete_)
     return false;   // Incomplete AMO finishes after B.
