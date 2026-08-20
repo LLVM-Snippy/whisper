@@ -67,6 +67,7 @@ namespace WdRiscv
       M_ENV_CALL             = 11, // Environment call from machine mode
       INST_PAGE_FAULT        = 12, // Instruction page fault
       LOAD_PAGE_FAULT        = 13, // Load page fault
+      RESERVED1              = 14,
       STORE_PAGE_FAULT       = 15, // Store page fault
       DOUBLE_TRAP            = 16,
       RESERVED0              = 17,
