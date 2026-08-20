@@ -1533,7 +1533,7 @@ CsRegs<URV>::enableSupervisorMode(bool flag)
     mask |= 4;
   auto& mce = regs_.at(unsigned(CN::MCOUNTEREN));
   auto& sce = regs_.at(unsigned(CN::SCOUNTEREN));
-  auto& hce = regs_.at(unsigned(CN::SCOUNTEREN));
+  auto& hce = regs_.at(unsigned(CN::HCOUNTEREN));
   mce.setReadMask((mce.getReadMask() & ~URV(7)) | mask);
   sce.setReadMask((sce.getReadMask() & ~URV(7)) | mask);
   hce.setReadMask((hce.getReadMask() & ~URV(7)) | mask);
@@ -2128,7 +2128,7 @@ CsRegs<URV>::enableZicntr(bool flag)
   URV mask = 7;  // Least sig 3 bits of MCOUNTEREN.
   auto& mce = regs_.at(unsigned(CN::MCOUNTEREN));
   auto& sce = regs_.at(unsigned(CN::SCOUNTEREN));
-  auto& hce = regs_.at(unsigned(CN::SCOUNTEREN));
+  auto& hce = regs_.at(unsigned(CN::HCOUNTEREN));
 
   if (flag)
     {
@@ -2164,7 +2164,7 @@ CsRegs<URV>::enableZihpm(bool flag)
   // MCOUNTEREN/SCOUNTEREN/HCOUNTEREN.
   auto& mce = regs_.at(unsigned(CN::MCOUNTEREN));
   auto& sce = regs_.at(unsigned(CN::SCOUNTEREN));
-  auto& hce = regs_.at(unsigned(CN::SCOUNTEREN));
+  auto& hce = regs_.at(unsigned(CN::HCOUNTEREN));
   URV mask = (~URV(0)) << 3;
   if (flag)
     {
@@ -4764,7 +4764,8 @@ CsRegs<URV>::defineMachineRegs()
   // Same for double_trap (16) and m_mode_env_call (11).
   URV hard0 = ( (URV(1) << unsigned(ExceptionCause::M_ENV_CALL))  |
 		(URV(1) << unsigned(ExceptionCause::DOUBLE_TRAP)) |
-		(URV(1) << unsigned(ExceptionCause::RESERVED0)) );
+		(URV(1) << unsigned(ExceptionCause::RESERVED0))   |
+		(URV(1) << unsigned(ExceptionCause::RESERVED1)) );
   mask = wam & ~ hard0;
   defineCsr("medeleg", Csrn::MEDELEG, !mand, !imp, 0, mask, mask);
 
@@ -5038,7 +5039,7 @@ CsRegs<URV>::defineSupervisorRegs()
   defineCsr("stvec",      Csrn::STVEC,      !mand, !imp, 0, mask, mask);
 
   mask = pokeMask = 0xffffffff;  // Only least sig 32 bits writable
-  defineCsr("scounteren", Csrn::SCOUNTEREN, !mand, !imp, 0, wam, wam);
+  defineCsr("scounteren", Csrn::SCOUNTEREN, !mand, !imp, 0, mask, pokeMask);
 
   // Supervisor Trap Handling 
   defineCsr("sscratch",   Csrn::SSCRATCH,   !mand, !imp, 0, wam, wam);
@@ -5185,6 +5186,7 @@ CsRegs<URV>::defineHypervisorRegs()
   mask = ~((URV(1) << unsigned(EC::S_ENV_CALL))               |
 	   (URV(1) << unsigned(EC::VS_ENV_CALL))              |
 	   (URV(1) << unsigned(EC::M_ENV_CALL))               |
+	   (URV(1) << unsigned(EC::DOUBLE_TRAP))              |
 	   (URV(1) << unsigned(EC::INST_GUEST_PAGE_FAULT))    |
 	   (URV(1) << unsigned(EC::LOAD_GUEST_PAGE_FAULT))    |
 	   (URV(1) << unsigned(EC::VIRT_INST))                |
@@ -5637,7 +5639,7 @@ CsRegs<URV>::defineStateEnableRegs()
   URV mask = 0;  // Default: nothing writable.
 
   if constexpr (sizeof(URV) == 8)
-    mask = (uint64_t(0b1101111) << 57) | (uint64_t(1) << 53);  // Bits 57-63 + bit 53 (ACLIC for Smcsps/Sscsps)
+    mask = uint64_t(0b11011111111) << 53;  // Bits 63:53
 
   defineCsr("mstateen0", CsrNumber::MSTATEEN0,  !mand, !imp, 0, mask, mask);
   defineCsr("mstateen1", CsrNumber::MSTATEEN1,  !mand, !imp, 0, 0, 0);
@@ -5651,7 +5653,7 @@ CsRegs<URV>::defineStateEnableRegs()
 
   if (sizeof(URV) == 4)
     {
-      mask = URV(0b1101111) << 25;   // Bits 25 to 31
+      mask = URV(0b11011111111) << 21;   // 31:21
       defineCsr("sstateen0h", CsrNumber::MSTATEEN0H,  !mand, !imp, 0, mask, mask);
       defineCsr("sstateen1h", CsrNumber::MSTATEEN1H,  !mand, !imp, 0, 0, 0);
       defineCsr("sstateen2h", CsrNumber::MSTATEEN2H,  !mand, !imp, 0, 0, 0);
