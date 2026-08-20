@@ -357,8 +357,8 @@ Interactive<URV>::peekAllCsrs(Hart<URV>& hart, std::ostream& out)
     out << (boost::format("%-10s %-10s %-10s %-10s\n") % "value" %
             "reset" % "mask" % "pokemask");
   else
-    out << (boost::format("%-18s %-18s %-18s %-10s\n") % "value" %
-            "reset" % "mask" % "pokemask");
+    out << (boost::format("%-18s %-18s %-18s %-18s %s\n") % "value" %
+            "reset" % "mask" % "pokemask" % "readmask");
 
   for (size_t i = 0; i <= size_t(CsrNumber::MAX_CSR_); ++i)
     {
