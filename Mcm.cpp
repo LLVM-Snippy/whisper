@@ -4534,7 +4534,7 @@ Mcm<URV>::ppoRule6(Hart<URV>& hart, const McmInstr& instrA, const McmInstr& inst
   assert(instrA.isRetired());
 
   if (instrA.di_.isAmo() and not instrA.di_.isAmocas())
-    return instrA.memOps_.size() == 2; // Fail if incomplete AMO (finishes afrer B).
+    return instrA.memOps_.size() != 2; // Fail if incomplete AMO (finishes afrer B).
 
   if (not instrA.complete_)
     return false;       // Fail if incomplete store (finishes after B).
@@ -4638,8 +4638,10 @@ Mcm<URV>::ppoRule7(const McmInstr& instrA, const McmInstr& instrB) const
   if (not aHasRc or not bHasRc)
     return true;
 
-  bool incomplete = not instrA.complete_ or (instrA.di_.isAmo() and instrA.memOps_.size() != 2);
-  if (incomplete)
+  if (instrA.di_.isAmo() and not instrA.di_.isAmocas())
+    return instrA.memOps_.size() != 2; // Fail if incomplete AMO (finishes afrer B).
+
+  if (not instrA.complete_)
     return false;   // Incomplete AMO finishes after B.
 
   if (instrB.memOps_.empty())
