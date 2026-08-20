@@ -7339,6 +7339,8 @@ Hart<URV>::vmadc_vvm(unsigned vcout, unsigned vs1, unsigned vs2, bool carry, uns
 	}
       vecRegs_.writeMaskRegister(vcout, ix, cout);
     }
+
+  vecRegs_.finishMaskDest(vcout, elems);
 }
 
 
@@ -7369,6 +7371,8 @@ Hart<URV>::vmadc_vxm(unsigned vcout, unsigned vs1, ELEM_TYPE e2, bool carry, uns
 	}
       vecRegs_.writeMaskRegister(vcout, ix, cout);
     }
+
+  vecRegs_.finishMaskDest(vcout, elems);
 }
 
 
@@ -7402,6 +7406,8 @@ Hart<URV>::vmsbc_vvm(unsigned vbout, unsigned vs1, unsigned vs2, bool borrow, un
 	}
       vecRegs_.writeMaskRegister(vbout, ix, bout);
     }
+
+  vecRegs_.finishMaskDest(vbout, elems);
 }
 
 
@@ -7434,6 +7440,8 @@ Hart<URV>::vmsbc_vxm(unsigned vbout, unsigned vs1, ELEM_TYPE e2, bool borrow, un
 	}
       vecRegs_.writeMaskRegister(vbout, ix, bout);
     }
+
+  vecRegs_.finishMaskDest(vbout, elems);
 }
 
 
