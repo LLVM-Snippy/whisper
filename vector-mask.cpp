@@ -51,9 +51,7 @@ Hart<URV>::execVmop_mm(const DecodedInst* di, OP op)
 	}
 
       // If not update-whole-mask and mask-agnostic-ones, fill tail with ones.
-      if (vecRegs_.isTailAgnosticOnes())
-	for (unsigned ix = count; ix < bitsPerReg; ++ix)
-	  vecRegs_.writeMaskRegister(vd, ix, true);
+      vecRegs_.finishMaskDest(vd, count);
     }
 
   vecRegs_.touchMask(vd);  // In case nothing was written.
@@ -226,11 +224,8 @@ Hart<URV>::execVmsbf_m(const DecodedInst* di)
 	  vecRegs_.writeMaskRegister(vd, ix, flag);
 	}
 
-      // In case we did not compute as if vl=vlmax, fill tail bits with ones if so configured.
-      if (vecRegs_.isTailAgnosticOnes())
-        for (uint32_t ix = elemCount; ix < bitsPerReg; ++ix)
-          vecRegs_.writeMaskRegister(vd, ix, true);
-
+      // If not update-whole-mask and mask-agnostic-ones, fill tail with ones.
+      vecRegs_.finishMaskDest(vd, elemCount);
       vecRegs_.touchMask(vd);
     }
 
@@ -277,11 +272,8 @@ Hart<URV>::execVmsif_m(const DecodedInst* di)
 	  vecRegs_.writeMaskRegister(vd, ix, flag);
 	}
 
-      // In case we did not compute as if vl=vlmax, fill tail bits with ones if so configured.
-      if (vecRegs_.isTailAgnosticOnes())
-        for (uint32_t ix = elemCount; ix < bitsPerReg; ++ix)
-          vecRegs_.writeMaskRegister(vd, ix, true);
-
+      // If not update-whole-mask and mask-agnostic-ones, fill tail with ones.
+      vecRegs_.finishMaskDest(vd, elemCount);
       vecRegs_.touchMask(vd);
     }
 
@@ -341,9 +333,7 @@ Hart<URV>::execVmsof_m(const DecodedInst* di)
 	}
 
       // In case we did not compute as if vl=vlmax, fill tail bits with ones if so configured.
-      if (vecRegs_.isTailAgnosticOnes())
-        for (uint32_t ix = elemCount; ix < bitsPerReg; ++ix)
-          vecRegs_.writeMaskRegister(vd, ix, true);
+      vecRegs_.finishMaskDest(vd, elemCount);
 
       vecRegs_.touchMask(vd);  // In case nothing was written
     }
