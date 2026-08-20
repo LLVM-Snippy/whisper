@@ -2640,17 +2640,24 @@ CsRegs<URV>::legalizeMstatus(URV value) const
   if (not superEnabled_)
     spp = PrivilegeMode(0);
 
-  if (mpp == PrivilegeMode::Supervisor and not superEnabled_)
-    mpp = PrivilegeMode::User;
+  using PM = PrivilegeMode;
 
-  if (mpp == PrivilegeMode::Reserved)
-    mpp = PrivilegeMode::User;
+  if ((mpp == PM::Supervisor and not superEnabled_) or mpp == PM::Reserved)
+    mpp = PM::User;
 
-  if (mpp == PrivilegeMode::User and not userEnabled_)
-    mpp = PrivilegeMode::Machine;
+  if (mpp == PM::User and not userEnabled_)
+    mpp = PM::Machine;
 
   fields.bits_.MPP = unsigned(mpp);
   fields.bits_.SPP = unsigned(spp);
+
+  if constexpr (sizeof(URV) == 8)
+    {
+      if (fields.bits_.SXL != 2)
+        fields.bits_.SXL = 2;
+      if (fields.bits_.UXL != 2)
+        fields.bits_.UXL = 2;
+    }
 
   return fields.value_;
 }
@@ -4769,7 +4776,8 @@ CsRegs<URV>::defineMachineRegs()
   mask = wam & ~ hard0;
   defineCsr("medeleg", Csrn::MEDELEG, !mand, !imp, 0, mask, mask);
 
-  defineCsr("mideleg", Csrn::MIDELEG, !mand, !imp, 0, wam, wam);
+  mask = 0x3eee;   // Bits 0, 4, 8, 14 and 15 are read-only zero.
+  defineCsr("mideleg", Csrn::MIDELEG, !mand, !imp, 0, mask, mask);
 
   // Interrupt enable: Least sig 12 bits corresponding to the 12
   // interrupt causes are writable.
