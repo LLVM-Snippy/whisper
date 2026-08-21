@@ -1491,11 +1491,20 @@ CsRegs<URV>::enableSupervisorMode(bool flag)
 		     CN::SCONTEXT } )
     enableCsr(csrn, flag);
 
-  if (hyperEnabled_)
-    for (auto csrn : { CN::VSSTATUS, CN::VSIE, CN::VSTVEC, CN::VSSCRATCH,
-		       CN::VSEPC, CN::VSCAUSE, CN::VSTVAL, CN::VSIP, CN::VSATP } )
+  if (rv32_)
+    for (auto csrn : { CN::SIEH, CN::SIPH, CN::MEDELEGH, CN::MIDELEGH } )
       enableCsr(csrn, flag);
 
+  if (hyperEnabled_)
+    {
+      for (auto csrn : { CN::VSSTATUS, CN::VSIE, CN::VSTVEC, CN::VSSCRATCH,
+                         CN::VSEPC, CN::VSCAUSE, CN::VSTVAL, CN::VSIP, CN::VSATP } )
+        enableCsr(csrn, flag);
+
+      if (rv32_)
+        for (auto csrn : { CN::VSIEH, CN::VSIPH, CN::HEDELEGH, CN::HIDELEGH } )
+          enableCsr(csrn, flag);
+    }
   using IC = InterruptCause;
 
   // In MIP/MIE, make writable/pokable bits corresponding to
@@ -4775,6 +4784,11 @@ CsRegs<URV>::defineMachineRegs()
 		(URV(1) << unsigned(ExceptionCause::RESERVED1)) );
   mask = wam & ~ hard0;
   defineCsr("medeleg", Csrn::MEDELEG, !mand, !imp, 0, mask, mask);
+  if (sizeof(URV) == 4)
+    {
+      defineCsr("medelegh", Csrn::MEDELEGH, !mand, !imp, 0, 0, 0);
+      markHighLowPair(Csrn::MEDELEGH, Csrn::MEDELEG);
+    }
 
   mask = 0x3eee;   // Bits 0, 4, 8, 14 and 15 are read-only zero.
   defineCsr("mideleg", Csrn::MIDELEG, !mand, !imp, 0, mask, mask);
@@ -5203,6 +5217,13 @@ CsRegs<URV>::defineHypervisorRegs()
   pokeMask = mask;
   csr = defineCsr("hedeleg",     Csrn::HEDELEG,     !mand, !imp, 0, mask, pokeMask);
   csr->setHypervisor(true);
+
+  if (rv32_)
+    {
+      csr = defineCsr("hedelegh",    Csrn::HEDELEGH,    !mand, !imp, 0, 0, 0);
+      csr->setHypervisor(true);
+      markHighLowPair(Csrn::HEDELEGH, Csrn::HEDELEG);
+    }
 
   using IC = InterruptCause;
 
