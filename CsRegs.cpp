@@ -4757,7 +4757,7 @@ CsRegs<URV>::defineMachineRegs()
   defineCsr("mstatus", Csrn::MSTATUS, mand, imp, val, mask, pokeMask);
   if (rv32_)
     {
-      mask = 0;
+      mask = 0x000007f0;
       defineCsr("mstatush", Csrn::MSTATUSH, mand, imp, 0, mask, mask);
       markHighLowPair(Csrn::MSTATUSH, Csrn::MSTATUS);
     }
@@ -4839,13 +4839,13 @@ CsRegs<URV>::defineMachineRegs()
       defineCsr(std::move(name), num,  !mand, imp, 0, pmpMask, pmpMask);
     }
 
-  URV menvMask = 0xf5;
+  URV menvMask = 0xfd;
   if constexpr (sizeof(URV) == 8)
-    menvMask = 0xe0000003000000f5;
+    menvMask = 0xf8000003000000fd;
   defineCsr("menvcfg", Csrn::MENVCFG, !mand, imp, 0, menvMask, menvMask);
   if (rv32_)
     {
-      menvMask = 0xe0000003;
+      menvMask = 0xf8000000;   // Least sig 2 bits are PMM and are roz on rv32.
       defineCsr("menvcfgh", Csrn::MENVCFGH, !mand, imp, 0, menvMask, menvMask);
       markHighLowPair(Csrn::MENVCFGH, Csrn::MENVCFG);
     }
