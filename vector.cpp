@@ -478,7 +478,7 @@ Hart<URV>::checkVecOpsVsEmul(const DecodedInst* di, unsigned groupX8,
 
   bool ok = true;
 
-  // Each vector operand number must be a multiple of the effective grop.
+  // Each vector operand number must be a multiple of the its effective group.
   unsigned nn = 0;  // Operand count.
   for (auto item : opList)
     {
