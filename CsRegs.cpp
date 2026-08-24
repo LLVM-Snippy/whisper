@@ -4329,6 +4329,7 @@ CsRegs<URV>::configCsrByUser(std::string_view name, bool implemented, URV resetV
           return false;
         }
       customH_.push_back(csrn);
+      csr->setHypervisor(true);
     }
 
   // Make user choice to disable a CSR sticky.
