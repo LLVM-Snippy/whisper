@@ -708,8 +708,8 @@ namespace WdRiscv
           if (virtMem_.stage1ExecReadable())
             return addr;   // If MXR, pointer masking does not apply.
         }
-      else if (virtMem_.execReadable())
-        return addr;  // If MXR, pointer masking does not apply.
+      else if (pm != PrivilegeMode::Machine and virtMem_.execReadable())
+        return addr;  // If MXR, pointer masking does not apply. MXR has no effect in M-mode.
       return pmaskManager_.applyPointerMask(addr, pm, virt, isLoad, bare);
     }
 
