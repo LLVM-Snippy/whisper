@@ -5264,10 +5264,20 @@ CsRegs<URV>::defineHypervisorRegs()
   pokeMask = mask = ~URV(1); // All bits writeable except bit 0
   csr = defineCsr("hgeip",       Csrn::HGEIP,       !mand, !imp, 0, mask, pokeMask);
   csr->setHypervisor(true);
-  csr = defineCsr("henvcfg",     Csrn::HENVCFG,     !mand, !imp, 0, wam, wam);
+
+  URV henvMask = 0xfd;
+  if constexpr (sizeof(URV) == 8)
+    henvMask = 0xf8000003000000fd;
+  csr = defineCsr("henvcfg",     Csrn::HENVCFG,     !mand, !imp, 0, henvMask, henvMask);
   csr->setHypervisor(true);
-  csr = defineCsr("henvcfgh",    Csrn::HENVCFGH,    !mand, !imp, 0, wam, wam);
-  csr->setHypervisor(true); markHighLowPair(Csrn::HENVCFGH, Csrn::HENVCFG);
+
+  if(rv32_)
+    {
+      henvMask = 0xf8000000;
+      csr = defineCsr("henvcfgh",    Csrn::HENVCFGH,    !mand, !imp, 0, henvMask, henvMask);
+      csr->setHypervisor(true);
+      markHighLowPair(Csrn::HENVCFGH, Csrn::HENVCFG);
+    }
 
   // Bits 30:29 (59:58 in rv64) are reserved so read-only-zero. Leas5 sig 2 bits also roz.
   mask = ~(URV(0x3) << 29);
