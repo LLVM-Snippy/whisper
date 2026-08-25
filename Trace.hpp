@@ -209,6 +209,33 @@ namespace WdRiscv
     VirtMem::Mode pageModeStage2() const
     { return hart_->lastPageModeStage2(); }
 
+    /// Return true if the instruction of this record is a CSR instruction.
+    bool isCsr() const
+    { return di_.isCsr(); }
+
+    /// Return true if the instruction of this record is a CSR instruction setting csrn to
+    /// the number of the target CSR and mode to its access mode (Read, Write, or
+    /// readWrite). Return false otherwise leaving csrn and mode unmodified.
+    bool isCsr(CsrNumber& csrn, OperandMode& mode) const
+    {
+      if (not isCsr())
+        return false;
+      csrn = CsrNumber(di_.op2());
+      mode = di_.ithOperandMode(2);
+      return true;
+    }
+    
+    /// Return the privilege mode of the CSR with the given number. Privileges at or above
+    /// the returned privilege may access the CSR. Return Machine privilege if the given
+    /// number does not correspond to a CSR.
+    PrivilegeMode getCsrPrivilegeMode(CsrNumber num) const
+    {
+      auto csr = hart_->findCsr(num);
+      if (not csr)
+        return PrivilegeMode::Machine;
+      return csr->privilegeMode();
+    }
+
     /// Return CSR value after last executed instruction.
     bool peekCsr(CsrNumber csr, URV& val) const
     { return hart_->peekCsr(csr, val); }
