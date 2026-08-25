@@ -2175,6 +2175,7 @@ Iommu::getStage2Pbmt(std::vector<PbmtInfo>* pbmtInfo)
     return;
 
   unsigned s1pbmt = pbmtInfo->back().pbmt;
+  pbmtInfo->back().addr = walk.result();   // Use SPA as requested by IOMMU DV team. 
 
   if (s1pbmt != 0)
     return;  // Stage1 has priority

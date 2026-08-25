@@ -782,6 +782,11 @@ namespace TT_IOMMU
     /// Report fault cause on fail. Optionally returns the combined leaf-PTE attributes
     /// (attribs) and MSI translation results (msiInfo), both used to build an ATS
     /// translation completion.
+    ///
+    /// If pbmtInfo is non-null, it will be filled with the supervisor physical addresses
+    /// (SPAs) and corresponding PBMTs of the implicit (stage 2) translations and the SPA
+    /// of the final stage2 translation and the corresponding effective PBMT (PBMT of VS
+    /// stage combined with that of G stage).
     bool translate(const IommuRequest& req, uint64_t& pa, unsigned& cause,
                    PteAttribs* attribs = nullptr, AtsMsiInfo* msiInfo = nullptr,
                    std::vector<PbmtInfo>* pbmtInfo = nullptr);
