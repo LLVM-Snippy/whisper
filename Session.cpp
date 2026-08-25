@@ -159,7 +159,10 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
   bool linux = false, newlib = false, semihost = false;
   checkForNewlibOrLinux(args, linux, newlib, semihost);
   bool clib = newlib or linux;
-  bool updateMisa = clib and not config.hasCsrConfig("misa");
+
+  // If the MISA CSR is not configured by the user, then auto configure it to match the
+  // ISA string.
+  bool updateMisa = not config.hasCsrConfig("misa");
 
   std::string isa;
   if (not determineIsa(config, args, clib, isa))
@@ -567,14 +570,14 @@ Session<URV>::determineIsa(const HartConfig& config, const Args& args, bool clib
     {
       if (args.verbose)
 	std::cerr << "Info: No ISA specified, using imacfdv_zicsr extensions for newlib/linux\n";
-      isa = "imacfdv_zicsr";
+      isa = "imabcfdv_zicsr";
     }
 
   if (isa.empty() and not args.raw)
     {
       if (args.verbose)
-	std::cerr << "Info: No ISA specified: Defaulting to imacfd_zicsr\n";
-      isa = "imacfd_zicsr";
+	std::cerr << "Info: No ISA specified: Defaulting to imabcfdv_zicsr\n";
+      isa = "imabcfdv_zicsr";
     }
 
   return true;

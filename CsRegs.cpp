@@ -4774,7 +4774,7 @@ CsRegs<URV>::defineMachineRegs()
 
   val = 0x4034112d;  // MISA: acdfimvsu
   if constexpr (sizeof(URV) == 8)
-    val = 0x800000000034112d;  // MISA: acdfimv
+    val = 0x800000000034112d;  // MISA: acdfimvsu
   defineCsr("misa", Csrn::MISA, mand, imp, val, rom, rom);
 
   // Bits corresponding to reserved exceptions are hardwired to zero in medeleg.
