@@ -5822,9 +5822,9 @@ CsRegs<URV>::defineAclicRegs()
 
   // ACLIC interrupt jump-table base CSRs (Smijt/Ssijt).  Spec §Smijt/Smehv:
   //   [XLEN-1:6] BASE   (WARL, ≥64-byte aligned)
-  //   [3:2]      EHV    (WARL when Smehv/Ssehv implemented; otherwise reserved)
+  //   [2]        EHV    (WARL when Smehv/Ssehv implemented; otherwise reserved)
   //   [1:0]      SHAMT  (WARL)
-  URV ijtMask  = ~URV(0x3F) | URV(0xF);  // BASE bits + SHAMT[1:0] + EHV[3:2]
+  URV ijtMask  = ~URV(0x3F) | URV(0x7);  // BASE bits + SHAMT[1:0] + EHV[2]
   defineCsr("mijt",  CN::MIJT,  !mand, !imp, reset, ijtMask,  ijtMask);
   defineCsr("sijt",  CN::SIJT,  !mand, !imp, reset, ijtMask,  ijtMask);
 }
