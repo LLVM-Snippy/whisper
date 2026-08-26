@@ -87,7 +87,7 @@ namespace WdRiscv
     {
       Direct             = 0,   // All traps set pc to BASE
       Vectored           = 1,   // For exceptions, pc = BASE. For interrupts, pc = BASE + 4xcause
-      HwVectored         = 2,   // ACLIC Smeihv/Sseihv: pc = BASE + 4*SIID (signed)
+      Reserved           = 2,   // Reserved (xtvec.mode=10; Smeihv/Sseihv removed in ACLIC v0.20)
       TableVectored      = 3    // ACLIC Smijt and Ssijt (jump-table)
     };
 

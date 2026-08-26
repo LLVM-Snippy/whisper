@@ -1262,7 +1262,7 @@ Svadu, Svade, Smaia, Ssaia, Zacas, Zimop, Zcmop, Smrnmi, Zicsr, Zicntr, Zihpm, Z
 Zihintpause, Smmpm, Ssnpm, Smnpm, Sscofpmf, Smstateen, Ssqosid, Sdtrig, Zicfilp, Zicfiss,
 Zic64b, Ziccamoa, Ziccif, Zicclsm, Ziccrse, Za64rs, Zaamo, Zalrsc, Zihintntl, Zvzip,
 Zvabd, Smdbltrp, Ssdbltrp, Zibi, Zabha, Zalasr, Svvptc, Zilsd, Zclsd, Zvfbfa, Zvfofp8min,
-Smcsps, Sscsps, Smip, Ssip, Smijt, Ssijt, Smehv, Ssehv, Smeihv, Sseihv, Smnip, Ssnip,
+Smcsps, Sscsps, Smip, Ssip, Smijt, Ssijt, Smehv, Ssehv, Smnip, Ssnip,
 Smidctrl, Ssidctrl, Smcdeleg, Smcsrind, Sscsrind, Smcntrpmf, Smepmp, Zvqwdota8i,
 Zvqwbdota8i, Zvqwdota16i, Zvqwbdota16i, Zvfbdota32f, Zvfwdota16bf, Zvfqwdota8f,
 Zvfqwbdota8f, Zvfwbdota16bf

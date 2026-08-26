@@ -108,8 +108,6 @@ namespace WdRiscv
     Ssijt,
     Smehv,
     Ssehv,
-    Smeihv,
-    Sseihv,
     Smnip,
     Ssnip,
     Smidctrl,

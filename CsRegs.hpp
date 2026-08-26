@@ -2212,17 +2212,10 @@ namespace WdRiscv
     /// Enable/disable ssijt extension (jump-table CSR: sijt).
     void enableSsijt(bool flag);
 
-    /// Enable/disable smeihv extension (external interrupt HW vectoring,
-    /// xtvec.mode=10).  Updates mtvec write mask to allow mode bit 1.
-    void enableSmeihv(bool flag);
-
-    /// Enable/disable sseihv extension.  Updates stvec write mask similarly.
-    void enableSseihv(bool flag);
-
     /// Recompute the writability of mtvec.mode bit 1 (when isMachine=true) or
-    /// stvec.mode bit 1 (when false).  That bit is writable iff at least one of
-    /// the two extensions that need it is enabled (Smijt or Smeihv for mtvec;
-    /// Ssijt or Sseihv for stvec).
+    /// stvec.mode bit 1 (when false).  That bit is writable iff the jump-table
+    /// extension is enabled (Smijt for mtvec; Ssijt for stvec), which needs
+    /// xtvec.mode=11.
     void updateXtvecModeMask(bool isMachine);
 
     /// Return true if Smcdeleg extension is enabled.
@@ -2858,9 +2851,7 @@ namespace WdRiscv
     bool aiaEnabled_ = false;     // Aia extension.
 
     bool smijtEnabled_ = false;   // Smijt: xtvec.mode=11 jump-table vectoring.
-    bool smeihvEnabled_ = false;  // Smeihv: xtvec.mode=10 HW vectoring.
     bool ssijtEnabled_ = false;   // Ssijt: stvec.mode=11 jump-table vectoring.
-    bool sseihvEnabled_ = false;  // Sseihv: stvec.mode=10 HW vectoring.
 
     bool smcdelegOn_ = false;     // Smcdeleg extension (counter delegation).
     bool smcntrpmfOn_ = false;    // Smcntrpmf extension (cycle/instret cfg filtering).

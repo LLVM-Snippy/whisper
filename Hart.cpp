@@ -704,12 +704,6 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Zvfqwbdota8f, isa_.isEnabled(RvExtension::Zvfqwbdota8f));
   enableExtension(RvExtension::Zvfwbdota16bf, isa_.isEnabled(RvExtension::Zvfwbdota16bf));
 
-  // Smeihv (external interrupt HW vectoring, mode=10).
-  enableExtension(RvExtension::Smeihv,   isa_.isEnabled(RvExtension::Smeihv));
-  // Sseihv requires Smeihv.
-  flag = isa_.isEnabled(RvExtension::Smeihv) and isa_.isEnabled(RvExtension::Sseihv);
-  enableExtension(RvExtension::Sseihv,   flag);
-
   // Smehv requires Smijt.
   flag = isa_.isEnabled(RvExtension::Smijt) and isa_.isEnabled(RvExtension::Smehv);
   enableExtension(RvExtension::Smehv,    flag);
@@ -830,8 +824,6 @@ Hart<URV>::processExtensions(bool verbose)
   enableSsnip(isa_.isEnabled(RvExtension::Ssnip));
   enableSmijt(isa_.isEnabled(RvExtension::Smijt));
   enableSsijt(isa_.isEnabled(RvExtension::Ssijt));
-  enableSmeihv(isa_.isEnabled(RvExtension::Smeihv));
-  enableSseihv(isa_.isEnabled(RvExtension::Sseihv));
 
   stimecmpActive_ = csRegs_.menvcfgStce();
   vstimecmpActive_ = csRegs_.henvcfgStce();
@@ -3668,7 +3660,7 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
   // Effective cause for ACLIC (not including most sig bit).
   URV excCode = cause;
 
-  // ACLIC Smnip/Ssnip (spec v0.19 §2.4.1/§2.4.2 "Changed Cause CSR"): when
+  // ACLIC Smnip/Ssnip (spec v0.20 §2.3.1/§2.3.2 "Changed Cause CSR"): when
   // xiconfig.xnipen is one, the exception code reported on an interrupt trap is
   // the signed interrupt identity (SIID) instead of the major interrupt id:
   //   - external interrupt -> minor interrupt identity (ACLIC source id)
@@ -3859,33 +3851,6 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
   auto nextPc = base;
   if (interrupt and tvecMode == TrapVectorMode::Vectored)
     nextPc = base + 4*cause;
-
-  // Smeihv/Sseihv (xtvec.mode=10): hardware vectoring of major + external
-  // interrupts.  PC = OBASE + 4*SIID, where SIID is the minor IID (positive)
-  // for external interrupts or -major_iid (signed) for major interrupts.
-  // Synchronous exceptions in this mode go to OBASE (offset 0).
-  if (interrupt and tvecMode == TrapVectorMode::HwVectored)
-    {
-      bool isSuper = (nextMode == PM::Supervisor);
-      bool hvOn = isSuper ? isRvSseihv() : isRvSmeihv();
-      if (hvOn)
-        {
-          using IC = InterruptCause;
-          auto ic = IC(cause);
-          bool externalCause = (ic == IC::M_EXTERNAL or ic == IC::S_EXTERNAL or
-                                ic == IC::VS_EXTERNAL or ic == IC::G_EXTERNAL);
-          using SRV = typename std::make_signed_t<URV>;
-          SRV siid = 0;
-          if (externalCause and aclic_)
-            {
-              unsigned id = aclic_->topInterrupt(not isSuper, nullptr, /*ignoreThreshold=*/true);
-              siid = SRV(id);
-            }
-          else
-            siid = -SRV(cause);  // major interrupt: SIID = -cause
-          nextPc = base + URV(siid * SRV(4));
-        }
-    }
 
   // Reset ELP.
   if (isRvZicfilp())

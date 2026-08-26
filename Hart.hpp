@@ -1626,14 +1626,6 @@ namespace WdRiscv
     void enableSsijt(bool flag)
     { enableExtension(RvExtension::Ssijt, flag); csRegs_.enableSsijt(flag); }
 
-    /// Enable/disable Smeihv extension (external interrupt HW vectoring, M-mode).
-    void enableSmeihv(bool flag)
-    { enableExtension(RvExtension::Smeihv, flag); csRegs_.enableSmeihv(flag); }
-
-    /// Enable/disable Sseihv extension (external interrupt HW vectoring, S-mode).
-    void enableSseihv(bool flag)
-    { enableExtension(RvExtension::Sseihv, flag); csRegs_.enableSseihv(flag); }
-
     /// Put this hart in debug mode setting the DCSR cause field to
     /// the given cause. Set the debug pc (DPC) to the given pc.
     void enterDebugMode_(DebugModeCause cause, URV pc);
@@ -2153,12 +2145,6 @@ namespace WdRiscv
 
     bool isRvSsehv() const
     { return extensionIsEnabled(RvExtension::Ssehv); }
-
-    bool isRvSmeihv() const
-    { return extensionIsEnabled(RvExtension::Smeihv); }
-
-    bool isRvSseihv() const
-    { return extensionIsEnabled(RvExtension::Sseihv); }
 
     /// Return true if current program is considered finished (either
     /// reached stop address or executed exit limit).

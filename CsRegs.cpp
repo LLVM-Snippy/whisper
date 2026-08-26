@@ -2577,8 +2577,7 @@ CsRegs<URV>::updateXtvecModeMask(bool isMachine)
   auto csr = findCsr(isMachine ? CN::MTVEC : CN::STVEC);
   if (not csr)
     return;
-  bool want = isMachine ? (smijtEnabled_ or smeihvEnabled_)
-                        : (ssijtEnabled_ or sseihvEnabled_);
+  bool want = isMachine ? smijtEnabled_ : ssijtEnabled_;
   URV mask = csr->getWriteMask();
   if (want)
     mask |= URV(2);
@@ -2607,24 +2606,6 @@ CsRegs<URV>::enableSsijt(bool flag)
   ssijtEnabled_ = flag;
   if (auto csr = findCsr(CsrNumber::SIJT))
     csr->setImplemented(flag);
-  updateXtvecModeMask(/*isMachine=*/false);
-}
-
-
-template <typename URV>
-void
-CsRegs<URV>::enableSmeihv(bool flag)
-{
-  smeihvEnabled_ = flag;
-  updateXtvecModeMask(/*isMachine=*/true);
-}
-
-
-template <typename URV>
-void
-CsRegs<URV>::enableSseihv(bool flag)
-{
-  sseihvEnabled_ = flag;
   updateXtvecModeMask(/*isMachine=*/false);
 }
 
