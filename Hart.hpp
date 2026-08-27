@@ -3186,7 +3186,8 @@ namespace WdRiscv
         return pma;
 
       pma.disable(Pma::Attrib::Cacheable);
-      pma.disable(Pma::Attrib::Rsrv);
+      if (not bbl_)
+        pma.disable(Pma::Attrib::Rsrv);  // FIX : double check spec.
 
       if (pbmt == VirtMem::Pbmt::Nc)
         {
@@ -3312,7 +3313,7 @@ namespace WdRiscv
 
     /// Temporary.
     void enableBabylonPma(bool flag)
-    { pmaMgr_.enableBabylon(flag); }
+    { bbl_ = flag; pmaMgr_.enableBabylon(flag); }
 
   protected:
 
@@ -7073,6 +7074,7 @@ namespace WdRiscv
 
     bool traceCacheOn_ = false;          // Generate a trace of cache line accesses when true.
     bool addrTrigsReportEa_ = false;
+    bool bbl_ = false;                   // Temporary: Enable Babylon PMA spec.
 
     // For lockless handling of MIP. We assume the software won't
     // trigger multiple interrupts while handling. To be cleared when
