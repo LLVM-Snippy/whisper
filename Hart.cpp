@@ -2228,6 +2228,7 @@ hasPendingInput(int fd)
 	  tcgetattr(fd, &term);
 	  cfmakeraw(&term);
 	  term.c_lflag &= ~ECHO;
+	  term.c_oflag |= OPOST | ONLCR;
 	  tcsetattr(fd, 0, &term);
 	}
     }

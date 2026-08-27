@@ -22,6 +22,7 @@ Uartsf::Uartsf(uint64_t addr, uint64_t size)
   tcgetattr(fileno(stdin), &term);
   cfmakeraw(&term);
   term.c_lflag &= ~ECHO;
+  term.c_oflag |= OPOST | ONLCR;
   tcsetattr(fileno(stdin), 0, &term);
 }
 
