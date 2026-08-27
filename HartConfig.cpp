@@ -1593,6 +1593,16 @@ HartConfig::applyMemoryConfig(Hart<URV>& hart) const
   if (config_ -> contains("cache"))
       std::cerr << "Warning: Configuration entry 'cache' no longer supported -- ignored\n";
 
+  // Temporary.
+  std::string_view tag = "babylon_pma";
+  if (config_ -> contains(tag))
+    {
+      if (bool flag = false; getJsonBoolean(tag, config_ -> at(tag), flag))
+        hart.enableBabylonPma(flag);
+      else
+        errors++;
+    }
+
   return errors == 0;
 }
 

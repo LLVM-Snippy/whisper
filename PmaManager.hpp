@@ -39,7 +39,7 @@ namespace WdRiscv
       {
        None = 0, Read = 1, Write = 2, Exec = 4, Idempotent = 8,
        AmoOther = 0x10,  // for amo add/min/max
-       AmoSwap = 0x20, AmoLogical = 0x40,
+       AmoSwap = 0x20, AmoLogical = 0x40, AmoCas = 0x80,
        MemMapped = 0x200, Rsrv = 0x400,
        Io = 0x800, Cacheable = 0x1000,
        MisalOk = 0x2000, // True if misaligned access supported.
@@ -167,6 +167,7 @@ namespace WdRiscv
         { "amological", Pma::AmoLogical },
         { "amoother", Pma::AmoOther },
         { "amoarithmetic", Pma::AmoArith },
+        { "amocas", Pma::AmoCas },
         { "amo", Pma::AmoArith },
         { "mem_mapped", Pma::MemMapped },
         { "rsrv", Pma::Rsrv },
@@ -198,6 +199,7 @@ namespace WdRiscv
       result += (attrib & Pma::Idempotent)? "idempotent," : "";
       result += (attrib & Pma::AmoOther)? "amoother," : "";
       result += (attrib & Pma::AmoSwap)? "amoswap," : "";
+      result += (attrib & Pma::AmoCas)? "amocas," : "";
       result += (attrib & Pma::AmoLogical)? "amological," : "";
       result += (attrib & Pma::MemMapped)? "memmapped," : "";
       result += (attrib & Pma::Rsrv)? "rsrv," : "";
@@ -228,6 +230,7 @@ namespace WdRiscv
       memMappedRanges_.emplace_back(firstAddr, lastAddr);
     }
 
+    /// Define a memory mapped register.
     bool defineRegister(uint64_t addr, uint64_t mask, unsigned size, Pma pma)
     {
       if (size != 4 and size != 8)
@@ -259,6 +262,8 @@ namespace WdRiscv
       return true;
     }
 
+    /// Return the mask of the MMR at the given address. Return an all-ones mask if the
+    /// addr is not associated with an MMR.
     uint64_t getMask(uint64_t addr) const
     {
       auto iter = memMappedRegs_.find(addr);
@@ -267,6 +272,7 @@ namespace WdRiscv
       return iter->second.mask_;
     }
 
+    /// Return true if the given address is a that of an MMR.
     bool isRegisterAddr(uint64_t addr) const
     {
       // Equivalent to probing memMappedRegs_ at the word-aligned address (for
@@ -937,24 +943,55 @@ namespace WdRiscv
       if (isExec(val))  attrib |= Pma::Attrib::Exec;
 
       // FIX : Support io channel0 and channel1
-      unsigned mtype = memType(val);
-      if (mtype != 0)
-        {    // IO
+      bool io = memType(val) != 0;
+      bool cacheable = isCacheable(val);
+      unsigned atype = amoType(val);
+      if (io)
+        {
           attrib |= Pma::Attrib::Io;
           attrib &= ~Pma::Attrib::MisalOk;       // No misaligned access in IO region.
           attrib |= Pma::Attrib::MisalAccFault;  // Misal access triggers access fault.
         }
       else
-        {   // Regular memory.
-          if (isCacheable(val))
+        {
+          // Regular memory. Process AMO attribues for cachable parts.
+          if (cacheable)
             {
+              if (bbl_)
+                if (atype == 0 or atype == 1 or atype == 2)
+                  return false;  // Reserved values.
+
               attrib |= Pma::Attrib::Cacheable;
               attrib |= Pma::Attrib::Rsrv;
 
-              unsigned atype = amoType(val);
-              if      (atype == 1)  attrib |= Pma::Attrib::AmoSwap;
+              if (bbl_)
+                {
+                  attrib |= Pma::Attrib::AmoSwap;
+                  attrib |= Pma::Attrib::AmoLogical;
+                  attrib |= Pma::Attrib::AmoArith;
+                  // attrib |= Pma::Attrib::AmoCas;  // Temporarily disabpled for back compat
+                }
+              else if (atype == 1)  attrib |= Pma::Attrib::AmoSwap;
               else if (atype == 2)  attrib |= Pma::Attrib::AmoLogical;
               else if (atype == 3)  attrib |= Pma::Attrib::AmoArith;
+            }
+        }
+
+      if (bbl_)
+        {
+          // Process AMO attributes for for io/nc regions.
+          if (io or not cacheable)
+            {
+              if (atype == 1 or atype == 3)  // Whisper: rsrv-eventual and non-eventual are same.
+                {
+                  attrib |= Pma::Attrib::Rsrv;
+                  attrib |= Pma::Attrib::AmoSwap;
+                  attrib |= Pma::Attrib::AmoLogical;
+                  attrib |= Pma::Attrib::AmoArith;
+                  // attrib |= Pma::Attrib::AmoCas;  // Temporarily disabpled for back compat
+                }
+              else if (atype == 2)
+                attrib |= Pma::Attrib::Rsrv;  // Whisper: rsrv-eventual and non-eventual are same.
             }
         }
 
@@ -1169,6 +1206,11 @@ namespace WdRiscv
     /// memory mapped reg or if addr is not double-word aligned.
     bool writeRegister(uint64_t addr, uint64_t value)
     { return mmRegs_->writeReg(addr, value); }
+
+    /// Temporary: Enable Babylon version of the PMA spec. Eventually this will be the
+    /// default.
+    void enableBabylon(bool flag)
+    { bbl_ = flag; }
 
   protected:
 
@@ -1391,6 +1433,8 @@ namespace WdRiscv
     bool trace_ = false;  // Collect stats if true.
     mutable std::vector<PmaTrace> pmaTrace_;
     AccessReason reason_{};
+
+    bool bbl_ = false;                   // True if Babylon version of the PMA spec.
 
     MmRegs local_;
     MmRegs* mmRegs_ = &local_;

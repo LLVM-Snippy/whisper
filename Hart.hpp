@@ -3310,6 +3310,10 @@ namespace WdRiscv
       return true;
     }
 
+    /// Temporary.
+    void enableBabylonPma(bool flag)
+    { pmaMgr_.enableBabylon(flag); }
+
   protected:
 
     /// Support memory consistency model (MCM) instruction cache. Read 2 bytes from the
