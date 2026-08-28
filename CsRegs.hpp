@@ -2311,7 +2311,7 @@ namespace WdRiscv
     /// supervisor CSRs get redirected to virtual supervisor CSRs and read/write
     /// of virtual supervisor CSRs become illegal.
     void setVirtualMode(bool flag)
-    { virtMode_ = flag; }
+    { virtMode_ = flag; updateSsp(); }
 
     /// helper to add fields of machine CSRs
     void addMachineFields();
@@ -2632,7 +2632,7 @@ namespace WdRiscv
 
     /// Return the SSE bits of MENVCFG CSR. Returns 0
     /// if not implemented.
-    uint8_t menvcfgSse()
+    bool menvcfgSse()
     {
       auto csr = getImplementedCsr(CsrNumber::MENVCFG);
       if (not csr)
@@ -2644,7 +2644,7 @@ namespace WdRiscv
 
     /// Return the SSE bits of SENVCFG CSR. Returns 0
     /// if not implemented.
-    uint8_t senvcfgSse()
+    bool senvcfgSse()
     {
       auto csr = getImplementedCsr(CsrNumber::SENVCFG);
       if (not csr)
@@ -2656,7 +2656,7 @@ namespace WdRiscv
 
     /// Return the SSE bits of HENVCFG CSR. Returns 0
     /// if not implemented.
-    uint8_t henvcfgSse()
+    bool henvcfgSse()
     {
       auto csr = getImplementedCsr(CsrNumber::HENVCFG);
       if (not csr)

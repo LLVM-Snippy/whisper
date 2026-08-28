@@ -1652,16 +1652,29 @@ CsRegs<URV>::updateSsp()
     return;
 
   bool mSse = menvcfgSse();
-  bool hSse = henvcfgSse();
-  bool sSse = senvcfgSse();
+  bool hSse = henvcfgSse() and mSse;
+  bool sSse = senvcfgSse() and mSse;
 
+  // MENVCFG.SSE clear implies HENVCFG.SSE is read-only-zero.
+  // FIX: Should we clear SSE bit when it becomes read-only-zero?
   auto henvcfg = findCsr(CsrNumber::HENVCFG); 
   URV mask = henvcfg->getReadMask();
   henvcfg->setReadMask((mask & ~URV(0x8)) | (mSse << 3));
+  URV wmask = henvcfg->getWriteMask();
+  henvcfg->setWriteMask((wmask & ~URV(0x8)) | (mSse << 3));
 
+  // MENVCFG.SSE clear implies SENVCFG.SSE is read-only-zero.
+  // HENVCFG.SSE clear and V implies SENVCFG.SSE is read-only-zero and is read only.
   auto senvcfg = findCsr(CsrNumber::SENVCFG);
   mask = senvcfg->getReadMask();
-  senvcfg->setReadMask((mask & ~URV(0x8)) | ((mSse & hSse) << 3));
+  bool roz = (not mSse) or (virtMode_ and not hSse);
+  bool bit = not roz;
+  senvcfg->setReadMask((mask & ~URV(0x8)) | (bit << 3));
+
+  wmask = senvcfg->getWriteMask();
+  bool ro = (virtMode_ and not hSse);
+  bit = mSse and not ro;
+  senvcfg->setWriteMask((wmask & ~URV(0x8)) | (bit << 3));
 
   // SSP accessibility follows effective xSSE:
   // - M-mode never has shadow stack access
@@ -5070,9 +5083,9 @@ CsRegs<URV>::defineSupervisorRegs()
   if (sip and mip)
     sip->tie(mip->valuePtr_); // Sip is a shadow if mip
 
-  mask = 0xf5;
+  mask = 0xfd;
   if constexpr (sizeof(URV) == 8)
-    mask = 0x00000003000000f5;  // PMM field writable.
+    mask = 0x00000003000000fd;  // PMM field writable.
   defineCsr("senvcfg",    Csrn::SENVCFG,    !mand, !imp, 0, mask, mask);
 
   mask = 0;
