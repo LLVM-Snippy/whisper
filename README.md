@@ -1244,10 +1244,13 @@ The hart registers are exposed as class attributes and implement step/run functi
 
 # Limitations
 
+Changing XLEN at run time by writing to the MISA register is not supported. Having SXLEN
+different from XLEN is not supported. Same for UXLEN.
+
 The "round to nearest break tie to max magnitude" rounding mode is not
-implemented unless you compile with the softfloat library:
+supported if Whisper is compiled withou the softfloat library:
 ```
-   make SOFT_FLOAT=1
+   make SOFT_FLOAT=0
 ```
 
 <a name="Supported" />
@@ -1257,7 +1260,7 @@ implemented unless you compile with the softfloat library:
 A, B, C, D, E, F, H, I, M, N, S, U, V, Zba, Zbb, Zbc, Zbs, Zfh, Zfhmin, Zlsseg, Zknd,
 Zkne, Zknh, Zbkb, Zbkc, Zbkx, Zksed, Zksh, Zkr, Svinval, Svnapot, Zicbom, Zicboz, Zicbop,
 Zawrs, Zmmul, Zvfh, Zvfhmin, Zvbb, Zvbc, Zvkg, Zvkned, Zvknha, Zvknhb, Zvksed, Zvksh,
-Zvkb, Zicond, Zca, Zcb, Zcf, Zcd, Zfa, Zfbfmin, Zvfbfmin, Zvfbfwma, Zvqdot, Sstc, Svpbmt,
+Zvkb, Zicond, Zca, Zcb, Zcf, Zcd, Zfa, Zfbfmin, Zvfbfmin, Zvfbfwma, Zvqdotq, Sstc, Svpbmt,
 Svadu, Svade, Smaia, Ssaia, Zacas, Zimop, Zcmop, Smrnmi, Zicsr, Zicntr, Zihpm, Zifencei,
 Zihintpause, Smmpm, Ssnpm, Smnpm, Sscofpmf, Smstateen, Ssqosid, Sdtrig, Zicfilp, Zicfiss,
 Zic64b, Ziccamoa, Ziccif, Zicclsm, Ziccrse, Za64rs, Zaamo, Zalrsc, Zihintntl, Zvzip,
@@ -1265,8 +1268,12 @@ Zvabd, Smdbltrp, Ssdbltrp, Zibi, Zabha, Zalasr, Svvptc, Zilsd, Zclsd, Zvfbfa, Zv
 Smcsps, Sscsps, Smip, Ssip, Smijt, Ssijt, Smehv, Ssehv, Smnip, Ssnip,
 Smidctrl, Ssidctrl, Smcdeleg, Smcsrind, Sscsrind, Smcntrpmf, Smepmp, Zvqwdota8i,
 Zvqwbdota8i, Zvqwdota16i, Zvqwbdota16i, Zvfbdota32f, Zvfwdota16bf, Zvfqwdota8f,
-Zvfqwbdota8f, Zvfwbdota16bf
+Zvfqwbdota8f, Zvfwbdota16bf, Svrsw60t59b
 
+An extension is active if it is in the ISA string (--isa command line option or value of
+the "isa" tag in the configuraion file) and if it is not inhibited by a run-time control.
+For example, the D extension is active if it is in the ISA string, the D bit is set in the
+MISA CSR, and the FS field is non-zero in the MSTATUS CSR.
 
 <a name="RISCOF"/>
 

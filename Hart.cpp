@@ -568,8 +568,15 @@ Hart<URV>::processExtensions(bool verbose)
   flag = flag and isa_.isEnabled(RvExtension::H);
   enableHypervisorMode(flag);
 
-  flag = (value & 1) and isa_.isEnabled(RvExtension::A);   // Atomic
-  enableExtension(RvExtension::A, flag);
+  flag = value & 1;  // MSTATUS.A  : AMO
+  if (isa_.isEnabled(RvExtension::A))
+    {
+      enableExtension(RvExtension::A, flag);
+      enableExtension(RvExtension::Zaamo, flag);
+      enableExtension(RvExtension::Zalrsc, flag);
+    }
+  else if (flag)
+    std::cerr << "Warning: Amo extension (A) is not in the ISA string yet MISA.A is being set.\n";
 
   flag = (value & 2) and isa_.isEnabled(RvExtension::B);   // Bit-manip
   enableExtension(RvExtension::B, flag);
