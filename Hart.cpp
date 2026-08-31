@@ -3093,7 +3093,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
       pa = stee_.clearSecureBits(pa);
     }
 
-  if (not pmaMgr_.accessPma(pa).isExec())
+  auto pma = pmaMgr_.accessPma(pa);
+  if (not pma.isExec())
     return ExceptionCause::INST_ACC_FAULT;
 
   bool wordAligned = (pa & 3) == 0;
@@ -3107,7 +3108,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
       // Override with MCM fetch cache. Complain if missing leaving opcode unomdified.
       // If line is io/nc, we cache it anyway counting on the test-bench to evict it.
       if (umfc and not readInstFromFetchCache(pa, inst))
-        mcm_->reportMissingFetch(*this, execCount_, pa);
+        if (pma.isCacheable() and not pma.isIo())
+          mcm_->reportMissingFetch(*this, execCount_, pa);
 
       if (initStateFile_)
 	dumpInitState("fetch", va, pa);
@@ -3124,7 +3126,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
     return ExceptionCause::INST_ACC_FAULT;
 
   if (umfc and not readInstFromFetchCache(pa, half))
-    mcm_->reportMissingFetch(*this, execCount_, pa);
+    if (pma.isCacheable() and not pma.isIo())
+      mcm_->reportMissingFetch(*this, execCount_, pa);
 
   if (initStateFile_)
     dumpInitState("fetch", va, pa);
@@ -3173,7 +3176,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
         }
     }
 
-  if (not pmaMgr_.accessPma(pa2).isExec())
+  auto pma2 = pmaMgr_.accessPma(pa2);
+  if (not pma2.isExec())
     {
       va += 2;  // To report faulting portion of fetch.
       return ExceptionCause::INST_ACC_FAULT;
@@ -3187,7 +3191,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
     }
 
   if (umfc and not readInstFromFetchCache(pa2, upperHalf))
-    mcm_->reportMissingFetch(*this, execCount_, pa2);
+    if (pma2.isCacheable() and not pma2.isIo())
+      mcm_->reportMissingFetch(*this, execCount_, pa2);
 
   if (initStateFile_)
     dumpInitState("fetch", va, pa2);
