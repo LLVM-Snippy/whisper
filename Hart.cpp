@@ -569,6 +569,8 @@ Hart<URV>::processExtensions(bool verbose)
   enableHypervisorMode(flag);
 
   flag = value & 1;  // MSTATUS.A  : AMO
+  enableExtension(RvExtension::Zaamo, isa_.isEnabled(RvExtension::Zaamo));
+  enableExtension(RvExtension::Zalrsc, isa_.isEnabled(RvExtension::Zalrsc));
   if (isa_.isEnabled(RvExtension::A))
     {
       enableExtension(RvExtension::A, flag);
@@ -613,8 +615,14 @@ Hart<URV>::processExtensions(bool verbose)
 	      << " but extension is mandatory -- assuming bit 8 set\n";
 
   flag = value & (URV(1) << ('m' - 'a'));
-  flag = flag and isa_.isEnabled(RvExtension::M);
-  enableExtension(RvExtension::M, flag);
+  enableExtension(RvExtension::Zmmul, isa_.isEnabled(RvExtension::Zmmul));
+  if (isa_.isEnabled(RvExtension::M))
+    {
+      enableExtension(RvExtension::M, flag);
+      enableExtension(RvExtension::Zmmul, flag);
+    }
+  else if (flag)
+    std::cerr << "Warning: Multiply extension (M) is not in the ISA string yet MISA.M is being set.\n";
 
   flag = value & (URV(1) << ('v' - 'a'));  // User-mode option.
   if (flag and not (extensionIsEnabled(RvExtension::F) and extensionIsEnabled(RvExtension::D)))
@@ -657,7 +665,6 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Zicboz,   isa_.isEnabled(RvExtension::Zicboz));
   enableExtension(RvExtension::Zicbop,   isa_.isEnabled(RvExtension::Zicbop));
   enableExtension(RvExtension::Zawrs,    isa_.isEnabled(RvExtension::Zawrs));
-  enableExtension(RvExtension::Zmmul,    isa_.isEnabled(RvExtension::Zmmul));
   enableExtension(RvExtension::Zvbb,     isa_.isEnabled(RvExtension::Zvbb));
   enableExtension(RvExtension::Zvbc,     isa_.isEnabled(RvExtension::Zvbc));
   enableExtension(RvExtension::Zvfbfmin, isa_.isEnabled(RvExtension::Zvfbfmin));
@@ -685,8 +692,6 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Ssaia,    isa_.isEnabled(RvExtension::Ssaia));
   enableExtension(RvExtension::Zicsr,    true /*isa_.isEnabled(RvExtension::Zicsr)*/); // Default true until we fix riscof
   enableExtension(RvExtension::Zifencei, true /*isa_.isEnabled(RvExtension::Zifencei)*/); // Default true until RTL catches up
-  enableExtension(RvExtension::Zaamo,    isa_.isEnabled(RvExtension::Zaamo));
-  enableExtension(RvExtension::Zalrsc,   isa_.isEnabled(RvExtension::Zalrsc));
   enableExtension(RvExtension::Zabha,    isa_.isEnabled(RvExtension::Zabha));
   enableExtension(RvExtension::Zalasr,   isa_.isEnabled(RvExtension::Zalasr));
   enableExtension(RvExtension::Zilsd,    isa_.isEnabled(RvExtension::Zilsd));
@@ -13962,7 +13967,7 @@ template<typename URV>
 void
 Hart<URV>::execMul(const DecodedInst* di)
 {
-  if (not isRvzmmul() and not isRvm())
+  if (not isRvzmmul())
     {
       illegalInst(di);
       return;
@@ -13983,7 +13988,7 @@ namespace WdRiscv
   void
   Hart<uint32_t>::execMulh(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14002,7 +14007,7 @@ namespace WdRiscv
   void
   Hart<uint32_t>::execMulhsu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14021,7 +14026,7 @@ namespace WdRiscv
   void
   Hart<uint32_t>::execMulhu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14040,7 +14045,7 @@ namespace WdRiscv
   void
   Hart<uint64_t>::execMulh(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14059,7 +14064,7 @@ namespace WdRiscv
   void
   Hart<uint64_t>::execMulhsu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14078,7 +14083,7 @@ namespace WdRiscv
   void
   Hart<uint64_t>::execMulhu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14546,7 +14551,7 @@ template <typename URV>
 void
 Hart<URV>::execMulw(const DecodedInst* di)
 {
-  if (not isRv64() or (not isRvm() and not isRvzmmul()))
+  if (not isRv64() or not isRvzmmul())
     {
       illegalInst(di);
       return;
