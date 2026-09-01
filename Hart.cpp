@@ -568,14 +568,22 @@ Hart<URV>::processExtensions(bool verbose)
   flag = flag and isa_.isEnabled(RvExtension::H);
   enableHypervisorMode(flag);
 
-  flag = value & 1;  // MSTATUS.A  : AMO
+  flag = value & 1;  // MISA.A  : AMO
   enableExtension(RvExtension::Zaamo, isa_.isEnabled(RvExtension::Zaamo));
   enableExtension(RvExtension::Zalrsc, isa_.isEnabled(RvExtension::Zalrsc));
+
+  // Zabha depends on Zaamo.
+  bool isaZabha = isa_.isEnabled(RvExtension::Zaamo) and isa_.isEnabled(RvExtension::Zaamo);
+  enableExtension(RvExtension::Zabha, isaZabha);
+
+  enableExtension(RvExtension::Zaamo, isaZabha);
   if (isa_.isEnabled(RvExtension::A))
     {
       enableExtension(RvExtension::A, flag);
       enableExtension(RvExtension::Zaamo, flag);
       enableExtension(RvExtension::Zalrsc, flag);
+      if (isaZabha)
+        enableExtension(RvExtension::Zabha, flag);
     }
   else if (flag)
     std::cerr << "Warning: Amo extension (A) is not in the ISA string yet MISA.A is being set.\n";
@@ -692,7 +700,6 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Ssaia,    isa_.isEnabled(RvExtension::Ssaia));
   enableExtension(RvExtension::Zicsr,    true /*isa_.isEnabled(RvExtension::Zicsr)*/); // Default true until we fix riscof
   enableExtension(RvExtension::Zifencei, true /*isa_.isEnabled(RvExtension::Zifencei)*/); // Default true until RTL catches up
-  enableExtension(RvExtension::Zabha,    isa_.isEnabled(RvExtension::Zabha));
   enableExtension(RvExtension::Zalasr,   isa_.isEnabled(RvExtension::Zalasr));
   enableExtension(RvExtension::Zilsd,    isa_.isEnabled(RvExtension::Zilsd));
   enableExtension(RvExtension::Zclsd,    isa_.isEnabled(RvExtension::Zclsd));
