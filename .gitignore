@@ -6,11 +6,22 @@ librvcore.a
 bazel-*
 **/*.clang-tidy.log
 
-__pycache__
-
 # VSCode
 .vscode/
 
 # build directories
 build-Linux
 trace-reader/sample-reader
+.makepy/artifacts
+__pycache__/
+*egg-info/
+**/node_modules
+.idea
+conan-dynamic-info.json
+makepy_hints.json
+conanbuild*.sh
+conanrun*.sh
+deactivate_*.sh
+CMakeUserPresets.json
+build
+.cache

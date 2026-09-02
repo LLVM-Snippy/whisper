@@ -15,6 +15,7 @@
 #pragma once
 
 #include <cstdint>
+#include <bit>
 
 // If using C++23 or later and std::float16_t is defined, use it.
 #if defined(__STDCPP_FLOAT16_T__)
