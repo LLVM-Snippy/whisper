@@ -61,6 +61,19 @@ endif()
 
 message(STATUS "WHISPER_BOOST_DIR=${WHISPER_BOOST_DIR}")
 
+include(CheckCompilerFlag)
+
+# Check for C++20 flag support across different compilers
+check_compiler_flag(CXX "-std=c++20" COMPILER_SUPPORTS_CXX20)
+if (NOT COMPILER_SUPPORTS_CXX20)
+find_program(SNIPPY_WHISPER_CXX NAMES g++-13 REQUIRED)
+find_program(SNIPPY_WHISPER_CC  NAMES gcc-13 REQUIRED)
+set(CMAKE_CXX_COMPILER "${SNIPPY_WHISPER_CXX}"
+    CACHE FILEPATH "C++ compiler" FORCE)
+
+set(CMAKE_C_COMPILER "${SNIPPY_WHISPER_CC}"
+    CACHE FILEPATH "C compiler" FORCE)
+endif()
 
 set(WHISPER_CXXFLAGS "-std=c++20 -fPIC")
 set(WHISPER_CFLAGS "-fPIC")
