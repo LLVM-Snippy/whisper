@@ -342,6 +342,16 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
       oss << "0x" << std::hex << ldStAddr_;
       if (ldStPhysAddr1_ != ldStAddr_)
 	oss << ":0x" << ldStPhysAddr1_;
+
+      auto pma = getPma(ldStPhysAddr1_);
+      auto sep = "";
+      if (not pma.isCacheable())
+        {
+          oss << ",nc";
+          sep = ",";
+        }
+      if (pma.isIo())
+        oss << sep << "io";
       tmp += " [" + oss.str() + "]";
     }
   else
@@ -365,7 +375,16 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
 		oss << ":0x" << einfo.pa_;
 	      if (not vecInfo.isLoad_)
 		oss << '=' << "0x" << std::setfill('0') << std::setw(num_nibbles) << einfo.data_;
-	    }
+              auto pma = getPma(einfo.pa_);
+              auto sep = "";
+              if (not pma.isCacheable())
+                {
+                  oss << ",nc";
+                  sep = ",";
+                }
+              if (pma.isIo())
+                oss << sep << "io";
+            }
 	  tmp += " [" + oss.str() + "]";
 	}
     }
