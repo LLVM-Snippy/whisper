@@ -11103,16 +11103,32 @@ Hart<URV>::execute(const DecodedInst* di)
       execVabd_vv(di);
       return;
 
+    case InstId::vabd_vx:
+      execVabd_vx(di);
+      return;
+
     case InstId::vabdu_vv:
       execVabdu_vv(di);
+      return;
+
+    case InstId::vabdu_vx:
+      execVabdu_vx(di);
       return;
 
     case InstId::vwabda_vv:
       execVwabda_vv(di);
       return;
 
+    case InstId::vwabda_vx:
+      execVwabda_vx(di);
+      return;
+
     case InstId::vwabdau_vv:
       execVwabdau_vv(di);
+      return;
+
+    case InstId::vwabdau_vx:
+      execVwabdau_vx(di);
       return;
 
     case InstId::sinval_vma:
