@@ -5034,7 +5034,6 @@ CsRegs<URV>::defineSupervisorRegs()
   //                    L           V               E   E  
   URV mask = 0b0'000000'0'0'0'0'1'1'0'00'11'00'11'1'0'0'1'0'0'0'1'0;
   URV pokeMask = mask | (URV(1) << (sizeof(URV)*8 - 1));  // Make SD pokable.
-  pokeMask |= URV(1) << 17;  // Make MPRV pokeable so that SRET can clear it.
   pokeMask |= URV(3) << 15;  // Make XS pokable.
   defineCsr("sstatus",    Csrn::SSTATUS,    !mand, !imp, 0, mask, pokeMask);
 

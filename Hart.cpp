@@ -12289,7 +12289,7 @@ namespace WdRiscv
     fields.bits_.MPIE = 1;
 
     // 1.3. Clear MPRV.
-    if (savedMode != PrivilegeMode::Machine and clearMprvOnRet_)
+    if (savedMode != PrivilegeMode::Machine)
       fields.bits_.MPRV = 0;
 
     // 1.4. Clear virtual (V) mode.
@@ -12380,7 +12380,7 @@ namespace WdRiscv
     fields.bits_.MPIE = 1;
 
     // 1.3. Clear MPRV.
-    if (savedMode != PrivilegeMode::Machine and clearMprvOnRet_)
+    if (savedMode != PrivilegeMode::Machine)
       fields.bits_.MPRV = 0;
 
     // 1.4. Clear virtual (V) mode.
@@ -12504,11 +12504,11 @@ Hart<URV>::execSret(const DecodedInst* di)
   if (not csRegs_.write(CsrNumber::SSTATUS, privMode_, fields.value_))
     assert(0 && "Error: Assertion failed");
 
-  // Clear MPRV (priv spec: if y≠M, xRET sets MPRV=0). Must write
-  // MSTATUS: sstatus write/poke masks omit MPRV.
-  if (savedMode != PrivilegeMode::Machine and clearMprvOnRet_)
+  // Clear MPRV (priv spec: if y≠M, xRET sets MPRV=0). For sret, y (SSTATUS.spp) is always
+  // different than M.
+  updateCachedMstatus();
+  if (mstatus_.bits_.MPRV)
     {
-      updateCachedMstatus();
       mstatus_.bits_.MPRV = 0;
       writeMstatus();
     }

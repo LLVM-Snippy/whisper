@@ -2294,11 +2294,6 @@ namespace WdRiscv
     void enableAiaExtension(bool flag)
     { isa_.enable(RvExtension::Smaia, flag); enableExtension(RvExtension::Smaia, flag); csRegs_.enableAia(flag); }
 
-    /// For privileged spec v1.12, we clear mstatus.MPRV if xRET
-    /// causes us to enter a privilege mode not Machine.
-    void enableClearMprvOnRet(bool flag)
-    { clearMprvOnRet_ = flag; }
-
     /// Make hfence.gvma ignore guest physical addresses (over-invalidate) when flag is
     /// true.
     void hfenceGvmaIgnoresGpa(bool flag)
@@ -6840,7 +6835,6 @@ namespace WdRiscv
     URV effectiveVsie_ = 0;         // Effective v supervisor interrupt enable.
     HvictlFields hvictl_;           // Cached value of hvictl CSR
 
-    bool clearMprvOnRet_ = true;
     bool cancelLrOnTrap_ = false;   // Cancel reservation on traps when true.
     bool cancelLrOnDebug_ = false;  // Cancel reservation on enter/exit debug mode.
 
