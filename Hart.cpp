@@ -12504,9 +12504,14 @@ Hart<URV>::execSret(const DecodedInst* di)
   if (not csRegs_.write(CsrNumber::SSTATUS, privMode_, fields.value_))
     assert(0 && "Error: Assertion failed");
 
-  // Clear MPRV
+  // Clear MPRV (priv spec: if y≠M, xRET sets MPRV=0). Must write
+  // MSTATUS: sstatus write/poke masks omit MPRV.
   if (savedMode != PrivilegeMode::Machine and clearMprvOnRet_)
-    csRegs_.poke(CsrNumber::SSTATUS, fields.value_, virtMode_);
+    {
+      updateCachedMstatus();
+      mstatus_.bits_.MPRV = 0;
+      writeMstatus();
+    }
 
   updateCachedSstatus();
 
