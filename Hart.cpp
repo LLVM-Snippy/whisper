@@ -5821,8 +5821,9 @@ Hart<URV>::takeTriggerAction(FILE* traceFile, URV pc, URV info,
       else
         {
           uint32_t inst = 0;
-          readInst(currPc_, inst);
-          printInstTrace(inst, instrTag, instStr, traceFile);
+          uint64_t ppc = 0;  // Physical pc. Set by readInst.
+          readInst(currPc_, ppc, inst);
+          printInstTrace(inst, instrTag, ppc, instStr, traceFile);
         }
     }
 
@@ -5961,6 +5962,7 @@ Hart<URV>::fetchInstWithTrigger(URV addr, uint64_t& physAddr, uint32_t& inst, FI
   setMemProtAccIsFetch(true);
 
   // Fetch instruction.
+  physAddr = addr;
   bool fetch = fetchInst(addr, physAddr, inst);
   if (not fetch or
       (injectException_ != ExceptionCause::NONE and not injectExceptionIsLd_))
@@ -5979,7 +5981,7 @@ Hart<URV>::fetchInstWithTrigger(URV addr, uint64_t& physAddr, uint32_t& inst, FI
         }
 
       std::string instStr;
-      printInstTrace(inst, execCount_, instStr, file);
+      printInstTrace(inst, execCount_, physAddr, instStr, file);
       return false;  // Next instruction in trap handler.
     }
 
@@ -7188,8 +7190,9 @@ Hart<URV>::processNmi(FILE* traceFile, std::string& instStr)
       if (initiateNmi(URV(nmi), pc_))
         {
           uint32_t inst = 0; // Load interrupted inst.
-          readInst(currPc_, inst);
-          printInstTrace(inst, execCount_, instStr, traceFile);
+          uint64_t ppc = 0;  // Physical PC. Set by readInst.
+          readInst(currPc_, ppc, inst);
+          printInstTrace(inst, execCount_, ppc, instStr, traceFile);
           if (mcycleEnabled())
             ++cycleCount_;
           return true;
@@ -7205,8 +7208,9 @@ Hart<URV>::processNmi(FILE* traceFile, std::string& instStr)
       if (initiateNmi(URV(nmi), pc_))
         {
           uint32_t inst = 0; // Load interrupted inst.
-          readInst(currPc_, inst);
-          printInstTrace(inst, execCount_, instStr, traceFile);
+          uint64_t ppc = 0;  // Physical PC. Set by readInst.
+          readInst(currPc_, ppc, inst);
+          printInstTrace(inst, execCount_, ppc, instStr, traceFile);
           if (mcycleEnabled())
             ++cycleCount_;
           return true;
@@ -7258,7 +7262,7 @@ Hart<URV>::processExternalInterrupt(FILE* traceFile, std::string& instStr)
 #endif
 	}
       initiateInterrupt(cause, nextMode, nextVirt, pc, hvi);
-      printInstTrace(inst, execCount_, instStr, traceFile);
+      printInstTrace(inst, execCount_, physPc, instStr, traceFile);
       if (mcycleEnabled())
 	++cycleCount_;
       return true;
@@ -7518,7 +7522,7 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
 
       if (doStats)
 	accumulateInstructionStats(di);
-      printInstTrace(inst, execCount_, instStr, traceFile);
+      printInstTrace(inst, execCount_, di.physAddress(), instStr, traceFile);
 
       if (sdtrigOn_)
         evaluateDebugStep();

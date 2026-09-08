@@ -277,8 +277,7 @@ printPageTableWalk(FILE* out, const Hart<URV>& hart, const char* tag,
 
 template <typename URV>
 void
-Hart<URV>::printInstTrace(uint32_t inst, uint64_t tag, std::string& tmp,
-			  FILE* out)
+Hart<URV>::printInstTrace(uint32_t inst, uint64_t tag, uint64_t ppc, std::string& tmp, FILE* out)
 {
   if (not out and not __tracerExtension)
     return;
@@ -290,8 +289,7 @@ Hart<URV>::printInstTrace(uint32_t inst, uint64_t tag, std::string& tmp,
   else
     {
       DecodedInst di;
-      uint64_t physPc = currPc_;
-      decode(currPc_, physPc, inst, di);
+      decode(currPc_, ppc, inst, di);
       printDecodedInstTrace(di, tag, tmp, out);
     }
 }
@@ -1000,9 +998,10 @@ Hart<URV>::logStop(const CoreException& ce, uint64_t counter, FILE* traceFile)
       retireCount_++;
 
       uint32_t inst = 0;
-      readInst(currPc_, inst);
+      uint64_t pa = 0;
+      readInst(currPc_, pa, inst);
       std::string instStr;
-      printInstTrace(inst, counter, instStr, traceFile);
+      printInstTrace(inst, counter, pa, instStr, traceFile);
     }
 
   using std::cerr;

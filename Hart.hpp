@@ -4242,10 +4242,11 @@ namespace WdRiscv
     void printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::string& tmp,
                                FILE* out);
 
-    /// Variant of the preceding method for cases where the trace is
-    /// printed before decode. If the instruction is not available
-    /// then a zero (illegal) value is required.
-    void printInstTrace(uint32_t instruction, uint64_t tag, std::string& tmp,
+    /// Variant of the preceding method for cases where the trace is printed before
+    /// decode. If the instruction is not available then a zero (illegal) value is
+    /// required. Ppc is the physical pc and should be set to the virtual pc if no
+    /// translation of if translation fails.
+    void printInstTrace(uint32_t instruction, uint64_t tag, uint64_t ppc, std::string& tmp,
 			FILE* out);
 
     /// Start a synchronous exceptions.
