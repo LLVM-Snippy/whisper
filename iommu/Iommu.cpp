@@ -2102,7 +2102,13 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
   if (not stage2Translate(iohgatp, effPriv, req.isRead(), req.isWrite(),
                           req.isExec(), gpa, dc.gade(), dc.sxl(), pa, cause, false /* isPdtAccess */,
                           attribs ? &s2Attribs : nullptr))
-    return false;
+    {
+      // Remove the GPA entry (last entry) added by getStage1Pbmt.
+      if (not pbmtInfo->empty())
+        pbmtInfo->pop_back();
+      return false;
+    }
+
   getStage2Pbmt(pbmtInfo);
 
   // Count G-stage page table walk event after successful second-stage translation
