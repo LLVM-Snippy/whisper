@@ -12763,8 +12763,8 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
             {
               // Section 5.5 of privileged spec. If CSRIND is 1, VS/VU access to
               // vsiselect/vsireg and VU access to sireg should ignore other stateen bits.
-              if (csr == CN::VSIREG or csr == CN::VSISELECT or
-                  (uMode and (csr == CN::SIREG or csr == CN::SISELECT)))
+              if (isVsiregCsr(csr) or csr == CN::VSISELECT or
+                  (uMode and (isSiregCsr(csr) or csr == CN::SISELECT)))
                 {
                   auto mstateen0 = csRegs_.read64(CN::MSTATEEN0);
                   Mstateen0Fields fields{mstateen0};
@@ -12783,7 +12783,7 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
               // or VU-mode to access siselect or sireg* raise a virtual instruction
               // exception, not an illegal instruction exception, regardless of the value
               // of vsiselect or any other mstateen bit.
-              if ((csr == CN::SIREG or csr == CN::SISELECT))
+              if ((isSiregCsr(csr) or csr == CN::SISELECT))
                 {
                   auto hse0 = csRegs_.read64(CN::HSTATEEN0);
                   auto mse0 = csRegs_.read64(CN::MSTATEEN0);
@@ -12835,7 +12835,7 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
             }
 
           // Section 2.5 of AIA. Check if MSTATEEN/HSTATEEN allow access.
-          if (csRegs_.stateenOn_ and virtMode_ and (csr == CN::SIREG or csr == CN::SISELECT))
+          if (csRegs_.stateenOn_ and virtMode_ and (isSiregCsr(csr) or csr == CN::SISELECT))
             {
               auto hstateen0 = csRegs_.read64(CsrNumber::HSTATEEN0);
               Mstateen0Fields fields{hstateen0};
@@ -12874,8 +12874,8 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
 
   if (virtMode_)
     {
-      if (isRvaia() and ((csr == CN::VSIREG or csr == CN::VSISELECT) or
-                         (uMode and (csr == CN::SIREG or csr == CN::SISELECT))))
+      if (isRvaia() and ((isVsiregCsr(csr) or csr == CN::VSISELECT) or
+                         (uMode and (isSiregCsr(csr) or csr == CN::SISELECT))))
         {
           virtualInst(di);
           return false;  // Section 2.3 of interrupt spec and section 5.4 of of privileged spec.
@@ -13010,6 +13010,14 @@ Hart<URV>::doCsrRead(const DecodedInst* di, CsrNumber csr, bool isWrite, URV& va
   if (csRegs_.read(csr, privMode_, value))
     return true;
 
+  // Unimplemented *iselect: spec leaves behavior unspecified. Default is to trap
+  // (below). When nop_ireg_on_oob_iselect is set, treat as a successful read of zero.
+  if (nopIregOnOobIselect_ and isIregCsr(csr))
+    {
+      value = 0;
+      return true;
+    }
+
   // Check if HS qualified (section 9.6.1 of privileged spec).
   using PM = PrivilegeMode;
   bool hsq = isRvs() and csRegs_.isReadable(csr, PM::Supervisor, false /*virtMode*/);
@@ -13035,7 +13043,7 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
   if (imsic_)
     {
       bool guestTopei = csr == CN::VSTOPEI or (csr == CN::STOPEI and virtMode);
-      bool guestIreg  = csr == CN::VSIREG or (csr == CN::SIREG and virtMode);
+      bool guestIreg  = isVsiregCsr(csr) or (isSiregCsr(csr) and virtMode);
       bool invalidVgein = not hstatus_.bits_.VGEIN or hstatus_.bits_.VGEIN >= imsic_->guestCount();
 
       if (guestTopei and invalidVgein)
@@ -13047,7 +13055,7 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
           return true;
 	}
 
-      if (csr == CN::MIREG or csr == CN::SIREG or csr == CN::VSIREG)
+      if (isIregCsr(csr))
         {
           if (privMode_ == PM::User and not virtMode_)  // U mode
             {
@@ -13055,9 +13063,8 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
               return true;
             }
 
-          CN iselect = CsRegs<URV>::advance(csr, -1);
-          if (guestIreg)
-            iselect = CN::VSISELECT;
+          CN iselect = isMiregCsr(csr) ? CN::MISELECT
+                     : (guestIreg ? CN::VSISELECT : CN::SISELECT);
 
           URV sel = 0;
           if (not peekCsr(iselect, sel))
@@ -13072,67 +13079,83 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
           /// Check if value in xISELECT is for imsic.
           bool imsicSel = csRegs_.isImsicSelectStrict(sel);
 
-          if (TT_IMSIC::Imsic::isFileSelReserved(sel))
+          bool reserved = TT_IMSIC::Imsic::isFileSelReserved(sel);
+          bool inaccessibleSel = not TT_IMSIC::Imsic::isFileSelAccessible<URV>(sel, guestIreg);
+          bool oobIselect = reserved or inaccessibleSel;
+
+          if (oobIselect and not nopIregOnOobIselect_)
             {
-              if (imsicSel and iselect == CN::MISELECT and csr == CN::MIREG)
+              if (reserved)
                 {
-                  illegalInst(di);
-                  return true;
+                  if (imsicSel and iselect == CN::MISELECT and isMiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (imsicSel and iselect == CN::SISELECT and isSiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (imsicSel and iselect == CN::VSISELECT)
+                    {
+                      // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
+                      // vsireg, or from VS-mode to access sireg (really vsireg), should
+                      // preferably raise an illegal instruction exception. This was in the
+                      // 2023 version but was removed from the 2025 version implying that it
+                      // became implementation dependent. We kept it.
+                      if ((isMhs and isVsiregCsr(csr)) or (isVs and isSiregCsr(csr)))
+                        illegalInst(di);
+                      else
+                        virtualInst(di);
+                      return true;
+                    }
                 }
-              if (imsicSel and iselect == CN::SISELECT and csr == CN::SIREG)
+
+              // Sec 2.3, accessing *ireg within a normally valid range with an invalid VGEIN
+              // is deemed inaccessible.  The only other ranges are "reserved", which we
+              // evaluate above.
+              if (inaccessibleSel)
                 {
-                  illegalInst(di);
-                  return true;
-                }
-              if (imsicSel and iselect == CN::VSISELECT)
-                {
-                  // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
-                  // vsireg, or from VS-mode to access sireg (really vsireg), should
-                  // preferably raise an illegal instruction exception. This was in the
-                  // 2023 version but was removed from the 2025 version implying that it
-                  // became implementation dependent. We kept it.
-                  if ((isMhs and csr == CN::VSIREG) or (isVs and csr == CN::SIREG))
-                    illegalInst(di);
-                  else
-                    virtualInst(di);
-                  return true;
+                  if (imsicSel and iselect == CN::MISELECT and isMiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (imsicSel and iselect == CN::SISELECT and isSiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (iselect == CN::VSISELECT)
+                    {
+                      // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
+                      // vsireg raise an illegal instruction exception, and attempts from VS-mode
+                      // to access sireg (really vsireg) raise a virtual instruction exception.
+                      if (isVs and isSiregCsr(csr))
+                        virtualInst(di);
+                      else
+                        illegalInst(di);  // Everything else including VSIREG in M/HS mode
+                      return true;
+                    }
                 }
             }
 
-          // Sec 2.3, accessing *ireg within a normally valid range with an invalid VGEIN
-          // is deemed inaccessible.  The only other ranges are "reserved", which we
-          // evaluate above.
-          if (not TT_IMSIC::Imsic::isFileSelAccessible<URV>(sel, guestIreg) or
-              (guestIreg and invalidVgein))
+          // Invalid VGEIN remains a trap even when OOB *iselect is configured as a no-op.
+          if (guestIreg and invalidVgein)
             {
-              if (imsicSel and iselect == CN::MISELECT and csr == CN::MIREG)
-                {
-                  illegalInst(di);
-                  return true;
-                }
-              if (imsicSel and iselect == CN::SISELECT and csr == CN::SIREG)
-                {
-                  illegalInst(di);
-                  return true;
-                }
-              if (iselect == CN::VSISELECT)
-                {
-                  // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
-                  // vsireg raise an illegal instruction exception, and attempts from VS-mode
-                  // to access sireg (really vsireg) raise a virtual instruction exception.
-                  if (isVs and csr == CN::SIREG)
-                    virtualInst(di);
-                  else
-                    illegalInst(di);  // Everything else including VSIREG in M/HS mode
-                  return true;
-                }
+              if (isVs and isSiregCsr(csr))
+                virtualInst(di);
+              else
+                illegalInst(di);
+              return true;
             }
         }
 
         // From section 5.3, When mvien.SEIP is set, 0x70-0xFF are reserved and stopei
         // are reserved from S-mode.
         bool isS = privMode_ == PM::Supervisor and not virtMode_;
-        if (isS and (csr == CN::STOPEI or csr == CN::SIREG))
+        if (isS and (csr == CN::STOPEI or isSiregCsr(csr)))
           {
             URV mvien = csRegs_.peekMvien();
             if ((mvien >> URV(InterruptCause::S_EXTERNAL)) & 1)
@@ -13144,7 +13167,7 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
                   }
 
                 // sireg
-                CN iselect = CsRegs<URV>::advance(csr, -1);
+                CN iselect = CN::SISELECT;
                 URV sel = 0;
                 if (not peekCsr(iselect, sel))
                   {
@@ -13161,31 +13184,36 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
               }
           }
     }
-  else if (aclic_ and (csr == CN::MIREG or csr == CN::MTOPEI or
-                        csr == CN::SIREG or csr == CN::STOPEI))
+  else if (aclic_ and (isMiregCsr(csr) or csr == CN::MTOPEI or
+                        isSiregCsr(csr) or csr == CN::STOPEI))
     {
       // No IMSIC, but ACLIC is present.  VSIREG/VSTOPEI are hypervisor CSRs not
       // used by ACLIC and remain illegal.
-      if ((csr == CN::SIREG or csr == CN::STOPEI) and not aclic_->hasSupervisorDomain())
+      if ((isSiregCsr(csr) or csr == CN::STOPEI) and not aclic_->hasSupervisorDomain())
         {
           illegalInst(di);
           return true;
         }
       // For xireg, validate the selector is in an ACLIC-defined range.
-      if (csr == CN::MIREG or csr == CN::SIREG)
+      if (isMiregCsr(csr) or isSiregCsr(csr))
         {
-          CN iselect = CsRegs<URV>::advance(csr, -1);
+          CN iselect = isMiregCsr(csr) ? CN::MISELECT : CN::SISELECT;
           URV sel = 0;
           if (not peekCsr(iselect, sel))
             { illegalInst(di); return true; }
           bool validSel = (sel >= 0x80 and sel <= 0xFF) or (sel >= 0x1000 and sel <= 0x10FF);
           if (not validSel)
-            { illegalInst(di); return true; }
+            {
+              if (nopIregOnOobIselect_)
+                return false;  // No-op: let the subsequent *ireg access read-zero / ignore write.
+              illegalInst(di);
+              return true;
+            }
         }
       // Valid ACLIC access — fall through to return true.
     }
   else if (csr == CN::MTOPEI or csr == CN::STOPEI or csr == CN::VSTOPEI or
-           csr == CN::MIREG or csr == CN::SIREG or csr == CN::VSIREG)
+           isIregCsr(csr))
     {
       illegalInst(di);
       return true;
@@ -13355,6 +13383,10 @@ Hart<URV>::doCsrWrite(const DecodedInst* di, CsrNumber csr, URV val,
   auto lastVal = csRegs_.peek(csr);
   if (not csRegs_.write(csr, privMode_, val))
     {
+      // Unimplemented *iselect: default trap (below). nop_ireg_on_oob_iselect: ignore write.
+      if (nopIregOnOobIselect_ and isIregCsr(csr))
+        return;
+
       // Same HS-qualified illegal/virtual behavior as doCsrRead.
       using PM = PrivilegeMode;
       bool hsq = isRvs() and csRegs_.isReadable(csr, PM::Supervisor, false /*virtMode*/);

@@ -510,6 +510,39 @@ namespace WdRiscv
   { return static_cast<unsigned>(a) >= static_cast<unsigned>(b); }
 
 
+  /// True if csr is mireg / mireg2 / ... / mireg6.
+  inline bool
+  isMiregCsr(CsrNumber n)
+  {
+    using CN = CsrNumber;
+    return n == CN::MIREG or n == CN::MIREG2 or n == CN::MIREG3 or
+           n == CN::MIREG4 or n == CN::MIREG5 or n == CN::MIREG6;
+  }
+
+  /// True if csr is sireg / sireg2 / ... / sireg6.
+  inline bool
+  isSiregCsr(CsrNumber n)
+  {
+    using CN = CsrNumber;
+    return n == CN::SIREG or n == CN::SIREG2 or n == CN::SIREG3 or
+           n == CN::SIREG4 or n == CN::SIREG5 or n == CN::SIREG6;
+  }
+
+  /// True if csr is vsireg / vsireg2 / ... / vsireg6.
+  inline bool
+  isVsiregCsr(CsrNumber n)
+  {
+    using CN = CsrNumber;
+    return n == CN::VSIREG or n == CN::VSIREG2 or n == CN::VSIREG3 or
+           n == CN::VSIREG4 or n == CN::VSIREG5 or n == CN::VSIREG6;
+  }
+
+  /// True if csr is an *ireg* window (mireg*, sireg*, or vsireg*).
+  inline bool
+  isIregCsr(CsrNumber n)
+  { return isMiregCsr(n) or isSiregCsr(n) or isVsiregCsr(n); }
+
+
   template <typename URV>
   class CsRegs;
 

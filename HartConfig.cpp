@@ -2591,6 +2591,18 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
         hart.enableClearMtvalOnIllInst(flag);
     }
 
+  // Default false: trap on unimplemented *iselect (spec recommended). True: no-op
+  // (read-zero / write-ignore) to match implementations that treat the unspecified
+  // behavior that way (e.g. current Babylon RTL).
+  tag = "nop_ireg_on_oob_iselect";
+  if (config_ -> contains(tag))
+    {
+      if (not getJsonBoolean(tag, config_ -> at(tag), flag))
+        errors++;
+      else
+        hart.enableNopIregOnOobIselect(flag);
+    }
+
   tag = "clear_mtval_on_ebreak";
   if (config_ -> contains(tag))
     {

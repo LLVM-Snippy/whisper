@@ -825,6 +825,14 @@ The default size is 4 (implying a PMP G of 0).
 Defines the maximum number of guest external interrupt count (GEILEN).
 Default is zero.
 
+### nop_ireg_on_oob_iselect
+When true, accessing an *ireg* CSR (`mireg`/`sireg`/`vsireg`, including
+windows 2-6) while the corresponding *iselect* (`miselect`/`siselect`/`vsiselect`)
+holds an unimplemented or out-of-bounds index is a no-op: reads yield zero and
+writes are ignored. Default is false, which raises an illegal (or virtual)
+instruction exception as recommended by the Smcsrind/AIA specs (the spec
+otherwise leaves this case unspecified).
+
 ### coherent_icache
 When true (default is false), mark the instruction cache as coherent in which case the
 fence.i instruction will stop clearing it. This is relevant for MCM and has no effect when
