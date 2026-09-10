@@ -2052,11 +2052,13 @@ CsRegs<URV>::enableSscofpmf(bool flag)
 	  if (flag)
 	    {
 	      csr->setWriteMask(csr->getWriteMask() | lcof);
+	      csr->setPokeMask(csr->getPokeMask() | lcof);
 	      csr->setReadMask(csr->getReadMask() | lcof);
 	    }
 	  else
 	    {
 	      csr->setWriteMask(csr->getWriteMask() & ~lcof);
+	      csr->setPokeMask(csr->getPokeMask() & ~lcof);
 	      csr->setReadMask(csr->getReadMask() & ~lcof);
 	    }
 	}
