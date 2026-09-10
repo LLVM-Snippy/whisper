@@ -6003,6 +6003,13 @@ CsRegs<URV>::peek(CsrNumber num, URV& value, bool virtMode) const
     return readMvip(value);
   if (num == CN::HIP)
     return readHip(value);
+  if (num == CN::MIP)
+    {
+      // MIP.SEIP is not in MIP's storage: the software-writable bit is MVIP's
+      // and the external level is not stored at all.
+      value = effectiveMip();
+      return true;
+    }
 
   value = csr->read();
 
