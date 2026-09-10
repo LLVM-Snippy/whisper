@@ -7283,7 +7283,7 @@ Hart<URV>::processTimerInterrupt()
   if (not timerStateStale_ and not vstimecmpActive_ and time_ < nextTimerDeadline_)
     return;
 
-  URV mipVal = csRegs_.overrideWithMvip(csRegs_.peekMip());
+  URV mipVal = csRegs_.overrideWithMvip(csRegs_.peekMipRaw());
   URV prev = mipVal;
 
   if (mtipEnabled_)
