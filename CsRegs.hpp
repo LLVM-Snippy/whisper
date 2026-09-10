@@ -1099,7 +1099,7 @@ namespace WdRiscv
     /// internal value of MIP.
     URV effectiveMip() const
     {
-      URV mip = overrideWithSeiPinAndMvip(peekMip());
+      URV mip = overrideWithSeiPinAndMvip(peekMipRaw());
       return mip;
     }
 
@@ -1175,6 +1175,14 @@ namespace WdRiscv
       auto i = (sel << 1) >> 1;  // Clear most sig bit.
       bool custom = i != sel;    // Most sig bit set.
       return custom and i <= 0x3f;
+    }
+
+    /// Fast peek method for MIP. Returns the raw value of MIP. Contributions of MVIP and
+    /// the external sei-pin are not included. For those, use effectiveMip.
+    URV peekMipRaw() const
+    {
+      const auto& csr = regs_.at(size_t(CsrNumber::MIP));
+      return csr.read();
     }
 
   protected:
@@ -1673,13 +1681,6 @@ namespace WdRiscv
     URV overrideWithSeiPinAndMvip(URV ip) const
     {
       return overrideWithSeiPin(overrideWithMvip(ip));
-    }
-
-    /// Fast peek method for MIP.
-    URV peekMip() const
-    {
-      const auto& csr = regs_.at(size_t(CsrNumber::MIP));
-      return csr.read();
     }
 
     /// Fast peek method for MVIP.
