@@ -2304,6 +2304,14 @@ namespace WdRiscv
     void enableClearMtvalOnIllInst(bool flag)
     { clearMtvalOnIllInst_ = flag; }
 
+    /// When flag is true, access to an *ireg* CSR (mireg/sireg/vsireg, including
+    /// windows 2-6) while the corresponding *iselect* contains an unimplemented or
+    /// out-of-bounds index is a no-op: reads yield zero and writes are ignored.
+    /// When false (default), such accesses raise an illegal (or virtual) instruction
+    /// exception as recommended by the spec.
+    void enableNopIregOnOobIselect(bool flag)
+    { nopIregOnOobIselect_ = flag; }
+
     /// Clear MTVAL on breakpoint exception if flag is true.
     /// Otherwise, set MTVAL to the virtual address of the instruction.
     void enableClearMtvalOnEbreak(bool flag)
@@ -6858,6 +6866,7 @@ namespace WdRiscv
     bool inDebugParkLoop_ = false;    // True if BREAKP exception goes to DPL.
 
     bool clearMtvalOnIllInst_ = false;
+    bool nopIregOnOobIselect_ = false;  // Trap on unimplemented *iselect (spec recommended).
     bool clearMtvalOnEbreak_ = false;
     bool clearMtvalOnEgs_ = false;
     bool lastEbreak_ = false;
