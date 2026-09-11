@@ -1636,8 +1636,10 @@ Iommu::translate(const IommuRequest& req, uint64_t& pa, unsigned& cause,
         cause = 5; // load access fault
       else if (req.isWrite() and not (isPmpWritable(pa) and isPmaWritable(pa)))
         cause = 7; // store/amo access fault
-      else
+      if (cause == 0)
         return true;
+      if (pbmtInfo and not pbmtInfo->empty())
+        pbmtInfo->pop_back();  // Pmp/pma fail: remove SPA entry as requested by DV.
     }
 
   // 3.6: For PCIe ATS translation requests, no faults are logged on these errors.
@@ -2104,7 +2106,7 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
                           attribs ? &s2Attribs : nullptr))
     {
       // Remove the GPA entry (last entry) added by getStage1Pbmt.
-      if (not pbmtInfo->empty())
+      if (pbmtInfo and not pbmtInfo->empty())
         pbmtInfo->pop_back();
       return false;
     }
