@@ -703,6 +703,35 @@ Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
       regCount++;
     }
 
+  // When the imsic is enabled and configured to capture trace, emit writes to
+  // indirectly accessed registers as n<select>=<value>.  This is in addition to
+  // the default trace, which only shows the indirect register alias (mireg, sireg, etc)
+  if (imsic_ and imsic_->traceEnabled())
+    {
+      TraceRecord<URV> tr(this, di);
+      std::vector<std::pair<URV, uint64_t>> mcvps, scvps;
+      std::vector<std::vector<std::pair<URV, uint64_t>>> gcvps;
+      std::vector<unsigned> minterrupts, sinterrupts;
+      std::vector<std::vector<unsigned>> ginterrupts;
+      tr.getImsicChanges(mcvps, scvps, gcvps, minterrupts, sinterrupts, ginterrupts);
+
+      auto printIregs = [&buffer, &regCount](const std::vector<std::pair<URV, uint64_t>>& cvps) {
+        for (auto [select, value] : cvps)
+          {
+            if (regCount) buffer.printChar(';');
+            buffer.printChar('n').print(uint64_t(select)).printChar('=').print(value);
+            regCount++;
+          }
+      };
+
+      printIregs(mcvps);
+      printIregs(scvps);
+      for (const auto& gcvp : gcvps)
+        printIregs(gcvp);
+
+      imsic_->clearTrace();
+    }
+
   // Changed vector register group.
   unsigned groupSize = 0;
   int vecReg = lastVecReg(di, groupSize);

@@ -26,8 +26,9 @@ using namespace WhisperUtil;
 
 
 // Log file characters corresponding to the operand types (these
-// correspond to the entries in OperandType).
-static const std::vector<char> operandTypeChar = { 'x', 'f', 'c', 'v', 'i' };
+// correspond to the entries in OperandType). IndirectCsr uses 'n' to avoid
+// colliding with the 'i' prefix of immediate operands.
+static const std::vector<char> operandTypeChar = { 'x', 'f', 'c', 'v', 'i', 'n' };
 
 // Log file characters corresponding to privilege mode (thses correspond
 // to the entries in PrivMode).
@@ -472,12 +473,15 @@ TraceReader::parseRegValue(uint64_t lineNum, char* regName,
  else
    operand.value = hexStrToNum(valStr);
 
- if ((rc == 'x' or rc == 'f' or rc == 'v' or rc == 'c') and
-     std::isdigit(regName[1]))
+ bool decRegUpdate = ((rc == 'x' or rc == 'f' or rc == 'v' or rc == 'c') and std::isdigit(regName[1]));
+ bool hexRegUpdate = ((rc == 'n') and std::isxdigit(static_cast<unsigned char>(regName[1])));
+ if (decRegUpdate or hexRegUpdate)
     {
       char* tail = nullptr;
-      unsigned regNum = std::strtoul(regName + 1, &tail, 10);
-      good = (rc == 'c') ? regNum < 4096 : regNum < 32;
+      unsigned regNum = std::strtoul(regName + 1, &tail, decRegUpdate ? 10 : 16);
+      good = (rc == 'c') ? regNum < 4096 :
+             (rc == 'n') ? regNum <= 0xff :
+                           regNum < 32;
       if (good)
 	{
 	  operand.number = regNum;
@@ -505,6 +509,13 @@ TraceReader::parseRegValue(uint64_t lineNum, char* regName,
 	      operand.prevValue = csRegs_.at(regNum);
 	      csRegs_.at(regNum) = operand.value;
 	    }
+          else if(rc == 'n')
+            {
+              operand.type = OperandType::IndirectCsr;
+	      auto it = indirectCsrs_.find(regNum);
+	      operand.prevValue = it == indirectCsrs_.end() ? 0 : it->second;
+	      indirectCsrs_[regNum] = operand.value;
+            }
 	  else
 	    good = false;
 
