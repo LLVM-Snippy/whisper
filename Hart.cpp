@@ -6074,8 +6074,6 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 	  currPc_ = pc_;
 
 	  ++execCount_;
-	  if (mcycleEnabled())
-	    ++cycleCount_;
 
           if (hasActiveTrigger() and icountTriggerFired() and breakpOrEnterDebugTripped())
             {
@@ -6125,8 +6123,11 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 
           // Increment pc and execute instruction
 	  pc_ += di->instSize();
-    auto incMinstret = minstretEnabled();
+          auto incMinstret = minstretEnabled();
 	  execute(di);
+
+	  if (mcycleEnabled())
+	    ++cycleCount_;
 
           if (hasActiveTrigger())
             evaluateIcountTrigger();
@@ -6441,9 +6442,6 @@ Hart<URV>::simpleRunWithLimit()
       currPc_ = pc_;
       ++execCount_;
 
-      if (mcycleEnabled())
-	++cycleCount_;
-
       if ((effectiveMie_ or
           (privMode_ != PrivilegeMode::Machine and effectiveSie_) or
           (virtMode_ and (effectiveVsie_ or hasHvi())))
@@ -6464,6 +6462,9 @@ Hart<URV>::simpleRunWithLimit()
       pc_ += di->instSize();
       auto incMinstret = minstretEnabled();
       execute(di);
+
+      if (mcycleEnabled())
+	++cycleCount_;
 
       if (not hasException_)
         {
@@ -7446,8 +7447,6 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
       resetExecInfo(); clearTraceData();
 
       ++execCount_;
-      if (mcycleEnabled())
-	++cycleCount_;
 
       if (hasActiveTrigger() and icountTriggerFired() and breakpOrEnterDebugTripped())
         {
@@ -7494,6 +7493,9 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
       pc_ += di.instSize();
       execute(&di);
       injectException_ = ExceptionCause::NONE;
+
+      if (mcycleEnabled())
+	++cycleCount_;
 
       if (hasActiveTrigger())
         evaluateIcountTrigger();
