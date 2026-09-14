@@ -2437,8 +2437,8 @@ CsRegs<URV>::enableZkr(bool flag)
     csr->setImplemented(flag);
 
   MseccfgFields<URV> mf{regs_.at(size_t(CN::MSECCFG)).getReadMask()};
-  mf.bits_.USEED = flag;
-  mf.bits_.SSEED = flag;
+  mf.bits_.USEED = flag and userEnabled_;
+  mf.bits_.SSEED = flag and superEnabled_;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
 }
 
