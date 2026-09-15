@@ -258,20 +258,6 @@ VirtMem::translateForSs(uint64_t va, PrivilegeMode priv,
 
 
 ExceptionCause
-VirtMem::translateForCbo(uint64_t va, PrivilegeMode priv,
-                         bool twoStage, bool zero, uint64_t& gpa1, uint64_t& pa1)
-{
-  cboMode_ = true;
-  bool read = not zero, write = zero, exec = false;
-  auto cause = translate(va, priv, twoStage, read, write, exec, gpa1, pa1);
-  if (cause != ExceptionCause::NONE)
-    cause = toStoreException(cause);
-  cboMode_ = false;
-  return cause;
-}
-
-
-ExceptionCause
 VirtMem::translate(uint64_t va, PrivilegeMode priv, bool twoStage,
 		   bool read, bool write, bool exec, uint64_t& gpa, uint64_t& pa)
 {
@@ -301,9 +287,8 @@ VirtMem::translate(uint64_t va, PrivilegeMode priv, bool twoStage,
       if (priv == PrivilegeMode::Supervisor)
 	if (entry->user_ and (exec or not sum_))
 	  return stage1PageFaultType(read, write, exec);
-      // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
-      if (isSs and not exec and isSsAccessFault(read))
-        return accessFaultType(read, write, exec);
+      if (isSs and not exec and isSsProt(false, read))
+        return stage1PageFaultType(read, write, exec);
 
       if (ssMode_)
         {
@@ -565,9 +550,8 @@ VirtMem::stage1Translate(uint64_t va, PrivilegeMode priv, bool read, bool write,
       if (priv == PrivilegeMode::Supervisor)
         if (entry->user_ and (exec or not vsSum_))
           return stage1PageFaultType(read, write, exec);
-      // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
-      if (isSs and not exec and isSsAccessFault(read))
-        return accessFaultType(read, write, exec);
+      if (isSs and not exec and isSsProt(true, read))
+        return stage1PageFaultType(read, write, exec);
 
       if (ssMode_)
         {
@@ -754,13 +738,9 @@ VirtMem::pageTableWalk(uint64_t address, PrivilegeMode privMode, bool read, bool
 
       // 3.
       if (not isValidPte(pte))
-        {
-          if (not isSsPte(pte) or not ssEnabled_)  // Reserved encoding.
-            return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
-          // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
-          if (not exec and isSsAccessFault(read))
-            return traceException(accessFaultType(read, write, exec), exec, walkIx);
-        }
+        if (not isSsPte(pte) or
+            (isSsPte(pte) and not exec and isSsProt(false, read)))
+          return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
 
       // 4.
       global = global or pte.global();
@@ -1164,13 +1144,9 @@ VirtMem::stage1PageTableWalk(uint64_t address, PrivilegeMode privMode, bool read
 
       // 3.
       if (not isValidPte(pte))
-        {
-          if (not isSsPte(pte) or not vsSsEnabled_)  // Reserved encoding.
-            return traceException(stage1PageFaultType(read, write, exec), forFetch_, walkIx);
-          // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
-          if (not exec and isSsAccessFault(read))
-            return traceException(accessFaultType(read, write, exec), forFetch_, walkIx);
-        }
+        if (not isSsPte(pte) or
+            (isSsPte(pte) and not exec and isSsProt(true, read)))
+          return traceException(stage1PageFaultType(read, write, exec), forFetch_, walkIx);
 
       // 4.
       global = global or pte.global();
