@@ -43,29 +43,12 @@ Hart<URV>::determineCboException(uint64_t& addr, uint64_t& gpa, uint64_t& pa, bo
     {
       if (pm != PrivilegeMode::Machine)
         {
-	  if (isZero)
-	    {
-	      bool read = false, write = true, exec = false;
-	      cause = virtMem_.translate(addr, pm, virt, read, write, exec, gpa, pa);
-	      if (cause != EC::NONE)
-		return cause;
-	    }
-	  else
-	    {
-	      // If load or store is allowed CBO is allowed.
-	      bool read = true, write = false, exec = false;
-	      cause = virtMem_.translate(addr, pm, virt, read, write, exec, gpa, pa);
-	      if (cause != EC::NONE)
-		{
-		  if (cause == EC::LOAD_ACC_FAULT)
-		    return EC::STORE_ACC_FAULT;
-		  if (cause == EC::LOAD_PAGE_FAULT)
-		    return EC::STORE_PAGE_FAULT;
-		  if (cause == EC::LOAD_GUEST_PAGE_FAULT)
-		    return EC::STORE_GUEST_PAGE_FAULT;
-		  return cause;
-		}
-	    }
+	  // Management ops translate as a read (allowed where a load is), cbo.zero
+	  // as a write. A shadow-stack page is an access fault for either. All
+	  // exceptions are reported as store/amo exceptions.
+	  cause = virtMem_.translateForCbo(addr, pm, virt, isZero, gpa, pa);
+	  if (cause != EC::NONE)
+	    return cause;
         }
     }
 
