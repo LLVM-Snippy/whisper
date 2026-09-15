@@ -118,15 +118,6 @@ namespace WdRiscv
     ExceptionCause translateForSs(uint64_t va, PrivilegeMode pm,
                                   bool twoStage, bool load, uint64_t& gpa1,
                                   uint64_t& pa1);
-
-    /// Translate for a cache-block operation (Zicbom/Zicboz). A management
-    /// operation (zero=false) translates as a read, cbo.zero as a write. Either
-    /// one is an access fault on a shadow-stack page (Zicfiss: "Access to a SS
-    /// page using cache-block operation (CBO.*) instructions is not permitted").
-    /// Exceptions are converted to store/amo exceptions.
-    ExceptionCause translateForCbo(uint64_t va, PrivilegeMode pm,
-                                   bool twoStage, bool zero, uint64_t& gpa1,
-                                   uint64_t& pa1);
     /// Configure regular translation (not 2-stage). This is typically called
     /// at reset and as a result of changes to the SATP CSR. The page table
     /// will be at address rootPageNum * pageSize.
@@ -1010,12 +1001,6 @@ namespace WdRiscv
     void enableVsSs(bool flag)
     { vsSsEnabled_ = flag; }
 
-    /// Return true if the current access to a shadow stack page (SS enabled)
-    /// is an access fault: a store by a non-shadow-stack instruction, or any
-    /// cache-block operation. Loads and shadow-stack instructions are allowed.
-    bool isSsAccessFault(bool load) const
-    { return not ssMode_ and (cboMode_ or not load); }
-
     /// Determine if shadow stack page is protected. All loads
     /// are allowed to access shadow stack pages.
     bool isSsProt(bool virt, bool load) const
@@ -1179,7 +1164,6 @@ namespace WdRiscv
 
     bool xForR_ = false;   // True for hlvx.hu and hlvx.wu instructions: use exec for read
     bool ssMode_ = false;  // True if shadow stack instruction.
-    bool cboMode_ = false;  // True if cache-block operation (CBO.*) instruction.
 
     std::vector<bool> supportedModes_; // Indexed by Mode.
 
