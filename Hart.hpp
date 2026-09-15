@@ -6429,10 +6429,22 @@ namespace WdRiscv
     void execVabdu_vv(const DecodedInst*);
 
     template<typename ELEM_TYPE>
+    void vabd_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
+                 unsigned start, unsigned elems, bool masked);
+    void execVabd_vx(const DecodedInst*);
+    void execVabdu_vx(const DecodedInst*);
+
+    template<typename ELEM_TYPE>
     void vwabda_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
                    unsigned start, unsigned elems, bool masked);
     void execVwabda_vv(const DecodedInst*);
     void execVwabdau_vv(const DecodedInst*);
+
+    template<typename ELEM_TYPE>
+    void vwabda_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
+                   unsigned start, unsigned elems, bool masked);
+    void execVwabda_vx(const DecodedInst*);
+    void execVwabdau_vx(const DecodedInst*);
 
     void execSinval_vma(const DecodedInst*);
     void execSfence_w_inval(const DecodedInst*);

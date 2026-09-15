@@ -2708,7 +2708,9 @@ PerfApi<URV>::getVecOpsLmul(HartType& hart, InstrPac& packet)
     case InstId::vfwmaccbf16_vv:
     case InstId::vfwmaccbf16_vf:
     case InstId::vwabda_vv:
+    case InstId::vwabda_vx:
     case InstId::vwabdau_vv:
+    case InstId::vwabdau_vx:
     case InstId::vzip_vv:
       packet.operands_[0].lmul = effWideLmul;
       break;
