@@ -3091,7 +3091,7 @@ HartConfig::applyAclintConfig(System<URV>& system, Hart<URV>& hart) const
     {
       if (not hasMtimer)
         {
-          std::cerr << "Error: aclint specified time_offset, but no timer_offset\n";
+          std::cerr << "Error: aclint specified time_offset, but no timecmp_offset\n";
           return false;
         }
       if (not getJsonUnsigned("aclint.time_offset", aclint.at(tag), timeOffset))
