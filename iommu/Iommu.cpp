@@ -2242,9 +2242,11 @@ Iommu::msiTranslate(const DeviceContext& dc, const IommuRequest& req,
   //    fault" (cause = 261).
   uint64_t pteAddr = mm | (ii * 16);
   uint64_t pte0 = 0, pte1 = 0;
-  bool corrupted = false;
-  if (not memRead(pteAddr, 8, bigEnd, pte0, corrupted) or not memRead(pteAddr+8, 8, bigEnd, pte1, corrupted))
+  bool corrupted0 = false, corrupted1 = false;
+  if (not memRead(pteAddr, 8, bigEnd, pte0, corrupted0) or
+      not memRead(pteAddr+8, 8, bigEnd, pte1, corrupted1))
     {
+      bool corrupted = corrupted0 or corrupted1;
       cause = corrupted ? 270 : 261;
       return false;
     }
@@ -2720,9 +2722,9 @@ Iommu::processCommand()
   AtsCommandData cmdData;
 
   bool bigEnd = fctl_.fields.be;
-  bool corrupted = false;
-  if (!memRead(cmdAddr,     8, bigEnd, cmdData.dw0, corrupted) ||
-      !memRead(cmdAddr + 8, 8, bigEnd, cmdData.dw1, corrupted))
+  bool corrupted0 = false, corrupted1 = false;
+  if (!memRead(cmdAddr,     8, bigEnd, cmdData.dw0, corrupted0) or
+      !memRead(cmdAddr + 8, 8, bigEnd, cmdData.dw1, corrupted1))
     {
       cqcsr_.fields.cqmf = 1;
       updateIpsr();
