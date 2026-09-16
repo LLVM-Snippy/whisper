@@ -10,6 +10,10 @@
 using namespace WdRiscv;
 using TT_STEE::Stee;
 
+// Defined in CsRegs.cpp: true if the given MISELECT/SISELECT/VSISELECT value
+// falls in the select range associated with an IMSIC.
+bool isImsicSelect(uint64_t sel);
+
 //NOLINTNEXTLINE(bugprone-reserved-identifier, cppcoreguidelines-avoid-non-const-global-variables)
 void (*__tracerExtension)(void*) = nullptr;
 
@@ -621,6 +625,65 @@ namespace Whisper
 }
 
 
+// Emit changes to indirectly-accessed registers as n<select>=<value>.
+// This includes changes due to explicit CSR writes, as well as changes
+// to IMSIC interrupt pending bits driven by message signaled interrupts.
+template <typename URV>
+static void
+printIndirectRegChanges(Hart<URV>& hart, const DecodedInst& di,
+                        const std::vector<CsrNumber>& csrns,
+                        Whisper::PrintBuffer& buffer, unsigned& regCount)
+{
+  auto imsic = hart.imsic();
+  bool imsicTrace = imsic and imsic->traceEnabled();
+
+  for (auto csrn : csrns)
+    {
+      CsrNumber selCsr = CsrNumber::MISELECT;
+      if (isSiregCsr(csrn))
+        selCsr = CsrNumber::SISELECT;
+      else if (isVsiregCsr(csrn))
+        selCsr = CsrNumber::VSISELECT;
+      else if (not isMiregCsr(csrn))
+        continue;
+
+      URV sel = hart.peekCsr(selCsr);
+      if (imsicTrace and isImsicSelect(sel))
+        continue;  // Reported by the IMSIC pass below.
+      if (regCount) buffer.printChar(';');
+      buffer.printChar('n').print(uint64_t(sel)).printChar('=').print(hart.peekCsr(csrn));
+      regCount++;
+    }
+
+  // IMSIC tracing in a separate pass that also captures the effect of MSI writes
+  if (imsicTrace)
+    {
+      TraceRecord<URV> tr(&hart, di);
+      std::vector<std::pair<URV, uint64_t>> mcvps, scvps;
+      std::vector<std::vector<std::pair<URV, uint64_t>>> gcvps;
+      std::vector<unsigned> minterrupts, sinterrupts;
+      std::vector<std::vector<unsigned>> ginterrupts;
+      tr.getImsicChanges(mcvps, scvps, gcvps, minterrupts, sinterrupts, ginterrupts);
+
+      auto printIregs = [&buffer, &regCount](const std::vector<std::pair<URV, uint64_t>>& cvps) {
+        for (auto [select, value] : cvps)
+          {
+            if (regCount) buffer.printChar(';');
+            buffer.printChar('n').print(uint64_t(select)).printChar('=').print(value);
+            regCount++;
+          }
+      };
+
+      printIregs(mcvps);
+      printIregs(scvps);
+      for (const auto& gcvp : gcvps)
+        printIregs(gcvp);
+
+      imsic->clearTrace();
+    }
+}
+
+
 template <typename URV>
 void
 Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
@@ -702,6 +765,9 @@ Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
       buffer.printChar('c').print(std::to_string(unsigned(csrn))).printChar('=').print(val);
       regCount++;
     }
+
+  // Changed indirectly-accessed registers (n<select>=<value>).
+  printIndirectRegChanges(*this, di, csrns, buffer, regCount);
 
   // Changed vector register group.
   unsigned groupSize = 0;
