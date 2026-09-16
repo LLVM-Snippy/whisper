@@ -533,11 +533,15 @@ notifyGdbAfterStop(WdRiscv::Hart<URV>& hart, int fd)
 
 template <typename URV>
 void
-handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
+handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd, bool notifyStop)
 {
   // The trap handler is expected to set the PC to point to the instruction
   // after the one with the exception if necessary/possible.
-  unsigned signalNum = notifyGdbAfterStop(hart, fd);
+  //
+  // After resume (ebreak, interrupt), the client is already waiting for a
+  // stop-reply. On the initial connect the client queries halt reason with
+  // '?'; do not push an unsolicited T packet.
+  unsigned signalNum = notifyStop ? notifyGdbAfterStop(hart, fd) : SIGTRAP;
 
   bool gotQuit = false;
 
@@ -988,5 +992,5 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
 }
 
 
-template void handleExceptionForGdb<uint32_t>(WdRiscv::Hart<uint32_t>&, int);
-template void handleExceptionForGdb<uint64_t>(WdRiscv::Hart<uint64_t>&, int);
+template void handleExceptionForGdb<uint32_t>(WdRiscv::Hart<uint32_t>&, int, bool);
+template void handleExceptionForGdb<uint64_t>(WdRiscv::Hart<uint64_t>&, int, bool);
