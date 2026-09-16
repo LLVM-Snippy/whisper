@@ -1001,6 +1001,26 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
         hart.enableTrapOobVstart(flag);
     }
 
+  tag = "log_masked_load";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (not getJsonBoolean(tag, vconf.at(tag), flag))
+        errors++;
+      else
+        hart.logMaskedVecLoad(flag);
+    }
+
+  tag = "log_masked_store";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (not getJsonBoolean(tag, vconf.at(tag), flag))
+        errors++;
+      else
+        hart.logMaskedVecStore(flag);
+    }
+
   if (errors == 0)
     hart.configVector(bytesPerVec, bytesPerElem.at(0), bytesPerElem.at(1), &minBytesPerLmul,
 		      &maxBytesPerLmul);

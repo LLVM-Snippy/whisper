@@ -368,8 +368,11 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
 	  for (uint64_t i = 0; i < elems.size(); ++i)
 	    {
 	      auto& einfo = elems.at(i);
-              if (not vecInfo.isLoad_ and einfo.skip_)
-                continue;  // Non-active vector store element.
+              // Don't log skipped elements unless requested by used.
+              if ( einfo.skip_ and
+                   ((vecInfo.isLoad_ and not logMaskedVecLoad_) or
+                    (not vecInfo.isLoad_ and not logMaskedVecStore_)) )
+                    continue;
               oss << sep;
               sep = ";";
 	      oss << "0x" << std::hex << einfo.va_;

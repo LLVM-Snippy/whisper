@@ -1499,6 +1499,14 @@ namespace WdRiscv
     void enableTrapOobVstart(bool flag)
     { trapOobVstart_ = flag; }
 
+    /// Print to the log file masked off vector load elements if flag is true.
+    void logMaskedVecLoad(bool flag)
+    { logMaskedVecLoad_ = flag; }
+
+    /// Print to the log file masked off vector store elements if flag is true.
+    void logMaskedVecStore(bool flag)
+    { logMaskedVecStore_ = flag; }
+
     /// Enable/disable the c (compressed) extension.
     void enableRvc(bool flag)
     { enableExtension(RvExtension::C, flag); csRegs_.enableRvc(flag); }
@@ -6931,6 +6939,9 @@ namespace WdRiscv
     bool misalHasPriority_ = true;
     bool trapNonZeroVstart_ = true;  // Trap if vstart > 0 in arith vec instructions
     bool trapOobVstart_ = false;     // Trap if vstart out of bounds: vstart >= VLMAX
+    bool logMaskedVecLoad_ = false;
+    bool logMaskedVecStore_ = false;
+
     bool bigEnd_ = false;            // True if big endian
     bool stimecmpActive_ = false;    // True if STIMECMP CSR is implemented.
     bool vstimecmpActive_ = false;   // True if VSTIMECMP CSR is implemented.
