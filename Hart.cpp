@@ -5784,7 +5784,7 @@ Hart<URV>::lastCsr(std::vector<CsrNumber>& csrs,
 
 template <typename URV>
 void
-handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd);
+handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd, bool notifyStop);
 
 
 // Return true if debug mode is entered and false otherwise.
@@ -6022,7 +6022,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
   unsigned gdbCount = 0, gdbLimit = 1000000;
 
   if (enableGdb_)
-    handleExceptionForGdb(*this, gdbInputFd_);
+    handleExceptionForGdb(*this, gdbInputFd_, false /*notifyStop*/);
 
   uint64_t& effectiveInstCounter = hasRoiTraceEnabled()? traceCount_ : execCount_;
 
@@ -6040,7 +6040,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
           gdbCount = 0;
           if (hasPendingInput(gdbInputFd_))
             {
-              handleExceptionForGdb(*this, gdbInputFd_);
+              handleExceptionForGdb(*this, gdbInputFd_, true /*notifyStop*/);
               continue;
             }
         }
@@ -12065,7 +12065,7 @@ Hart<URV>::execEbreak(const DecodedInst* di)
   if (enableGdb_)
     {
       setPc(currPc_);
-      handleExceptionForGdb(*this, gdbInputFd_);
+      handleExceptionForGdb(*this, gdbInputFd_, true /*notifyStop*/);
       return;
     }
 
