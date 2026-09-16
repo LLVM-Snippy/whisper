@@ -654,6 +654,8 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd, bool notifyStop)
                     URV addr = 0, len = 0;
                     if (not hexToInt(addrStr, addr) or not hexToInt(lenStr, len))
                       reply << "E02";
+                    else if (len > PacketSize / 2)
+                      reply << "E01";
                     else
                       {
                         bool fault = false;
