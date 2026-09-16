@@ -479,8 +479,11 @@ TraceReader::parseRegValue(uint64_t lineNum, char* regName,
     {
       char* tail = nullptr;
       unsigned regNum = std::strtoul(regName + 1, &tail, decRegUpdate ? 10 : 16);
+      // The legal range for indirect regsiter numbers is implementation defined.
+      // Therefore they are not range checked here, instead this code trusts the
+      // trace writer as the authority on which indirect registers are accessible.
       good = (rc == 'c') ? regNum < 4096 :
-             (rc == 'n') ? regNum <= 0xff :
+             (rc == 'n') ? true :
                            regNum < 32;
       if (good)
 	{
@@ -509,13 +512,13 @@ TraceReader::parseRegValue(uint64_t lineNum, char* regName,
 	      operand.prevValue = csRegs_.at(regNum);
 	      csRegs_.at(regNum) = operand.value;
 	    }
-          else if(rc == 'n')
-            {
-              operand.type = OperandType::IndirectCsr;
+	  else if (rc == 'n')
+	    {
+	      operand.type = OperandType::IndirectCsr;
 	      auto it = indirectCsrs_.find(regNum);
 	      operand.prevValue = it == indirectCsrs_.end() ? 0 : it->second;
 	      indirectCsrs_[regNum] = operand.value;
-            }
+	    }
 	  else
 	    good = false;
 
