@@ -1906,40 +1906,46 @@ CsRegs<URV>::enableSsdbltrp(bool flag)
   uint64_t sdtBit = uint64_t(1) << 24;
 
   // DTE is bit 59 of menvcfg (RV64) / bit 27 of menvcfgh (RV32).
+  // Same for henvcfg/henvcfgh.
   // Controls whether the SDT mechanism is in effect (machine.adoc §menvcfg).
   uint64_t dteBit64 = uint64_t(1) << 59;  // full 64-bit position
   uint32_t dteBit32 = uint32_t(1) << 27;  // high-word position in RV32
 
-  auto menvcfg = findCsr(CN::MENVCFG);
-  if (menvcfg)
+  if constexpr (sizeof(URV) == 8)
     {
-      if constexpr (sizeof(URV) == 8)
+      for (auto csrn : { CN::MENVCFG, CN::HENVCFG } )
         {
-          URV mmask = menvcfg->getReadMask();
-          mmask = flag ? (mmask | URV(dteBit64)) : (mmask & ~URV(dteBit64));
-          menvcfg->setReadMask(mmask);
-          mmask = menvcfg->getWriteMask();
-          mmask = flag ? (mmask | URV(dteBit64)) : (mmask & ~URV(dteBit64));
-          menvcfg->setWriteMask(mmask);
-          mmask = menvcfg->getPokeMask();
-          mmask = flag ? (mmask | URV(dteBit64)) : (mmask & ~URV(dteBit64));
-          menvcfg->setPokeMask(mmask);
+          if (auto cfg = findCsr(csrn); cfg)
+            {
+              URV mask = cfg->getReadMask();
+              mask = flag ? (mask | URV(dteBit64)) : (mask & ~URV(dteBit64));
+              cfg->setReadMask(mask);
+              mask = cfg->getWriteMask();
+              mask = flag ? (mask | URV(dteBit64)) : (mask & ~URV(dteBit64));
+              cfg->setWriteMask(mask);
+              mask = cfg->getPokeMask();
+              mask = flag ? (mask | URV(dteBit64)) : (mask & ~URV(dteBit64));
+              cfg->setPokeMask(mask);
+            }
         }
     }
-
-  // RV32: DTE lives in menvcfgh at bit 27.
-  auto menvcfgh = findCsr(CN::MENVCFGH);
-  if (menvcfgh)
+  else
     {
-      URV hmask = menvcfgh->getReadMask();
-      hmask = flag ? (hmask | URV(dteBit32)) : (hmask & ~URV(dteBit32));
-      menvcfgh->setReadMask(hmask);
-      hmask = menvcfgh->getWriteMask();
-      hmask = flag ? (hmask | URV(dteBit32)) : (hmask & ~URV(dteBit32));
-      menvcfgh->setWriteMask(hmask);
-      hmask = menvcfgh->getPokeMask();
-      hmask = flag ? (hmask | URV(dteBit32)) : (hmask & ~URV(dteBit32));
-      menvcfgh->setPokeMask(hmask);
+      for (auto csrn : { CN::MENVCFGH, CN::HENVCFGH } )
+        {
+          if (auto cfg = findCsr(csrn); cfg)
+            {
+              URV mask = cfg->getReadMask();
+              mask = flag ? (mask | URV(dteBit32)) : (mask & ~URV(dteBit32));
+              cfg->setReadMask(mask);
+              mask = cfg->getWriteMask();
+              mask = flag ? (mask | URV(dteBit32)) : (mask & ~URV(dteBit32));
+              cfg->setWriteMask(mask);
+              mask = cfg->getPokeMask();
+              mask = flag ? (mask | URV(dteBit32)) : (mask & ~URV(dteBit32));
+              cfg->setPokeMask(mask);
+            }
+        }
     }
 
   auto mstatus = findCsr(CN::MSTATUS);

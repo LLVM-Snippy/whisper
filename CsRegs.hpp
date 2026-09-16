@@ -1766,9 +1766,15 @@ namespace WdRiscv
       const auto& mideleg = regs_.at(size_t(CsrNumber::MIDELEG));
       const auto& hideleg = regs_.at(size_t(CsrNumber::HIDELEG));
       const auto& hvien = regs_.at(size_t(CsrNumber::HVIEN));
-      URV value = ((mie.read() & mideleg.read()) | (shadowSie_ & mvien.read() & ~mideleg.read())) & hideleg.read();
-      // HVIEN affects interrupt ids 13 to 63 (see section 6.3.2 of interrupt spec).
-      value |= csr.read() & ~hideleg.read() & hvien.read() & ((~URV(0)) << 13);
+
+      // Bits 13 to 63 from SIE.
+      URV hidVal = hideleg.read();
+      URV sieVal = (mie.read() & mideleg.read()) | (shadowSie_ & mvien.read() & ~mideleg.read());
+      // Where hideleg is 1 we want sie, else either 0 or vsip
+      URV topBits = (sieVal & hidVal) | (csr.read() & hvien.read() & ~hidVal);
+      topBits = (topBits >> 13) << 13;  // Clear bits 0 to 12
+
+      URV value = ((csr.read() << 1) & URV(0xfff) & hidVal) | topBits;
       return value;
     }
 
