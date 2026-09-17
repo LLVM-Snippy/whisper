@@ -234,6 +234,21 @@ Hart<URV>::checkRoundingModeHp(const DecodedInst* di)
 template <typename URV>
 inline
 bool
+Hart<URV>::checkRoundingModeHpmin(const DecodedInst* di)
+{
+  if ((not isZfhLegal() and not isZfhminLegal()) or not checkRoundingModeCommon(di))
+    {
+      illegalInst(di);
+      return false;
+    }
+
+  return true;
+}
+
+
+template <typename URV>
+inline
+bool
 Hart<URV>::checkRoundingModeSp(const DecodedInst* di)
 {
   if (not isFpLegal() or not checkRoundingModeCommon(di))
@@ -2104,13 +2119,7 @@ Hart<URV>::execFcvt_s_h(const DecodedInst* di)
 {
   // Half to single
 
-  if (not isZfhLegal() and not isZfhminLegal())
-    {
-      illegalInst(di);
-      return;
-    }
-
-  if (not checkRoundingModeHp(di))
+  if (not checkRoundingModeHpmin(di))
     return;
 
   Float16 f1 = fpRegs_.readHalf(di->op1());
@@ -2131,13 +2140,13 @@ Hart<URV>::execFcvt_d_h(const DecodedInst* di)
 {
   // Half to double
 
-  if (not isRvd() or (not isZfhLegal() and not isZfhminLegal()))
+  if (not isRvd())
     {
       illegalInst(di);
       return;
     }
 
-  if (not checkRoundingModeHp(di))
+  if (not checkRoundingModeHpmin(di))
     return;
 
   Float16 f1 = fpRegs_.readHalf(di->op1());
@@ -2158,13 +2167,7 @@ Hart<URV>::execFcvt_h_s(const DecodedInst* di)
 {
   // Single to half.
 
-  if (not isZfhLegal() and not isZfhminLegal())
-    {
-      illegalInst(di);
-      return;
-    }
-
-  if (not checkRoundingModeHp(di))
+  if (not checkRoundingModeHpmin(di))
     return;
 
   float f1 = fpRegs_.readSingle(di->op1());
@@ -2186,13 +2189,13 @@ Hart<URV>::execFcvt_h_d(const DecodedInst* di)
 {
   // Double to half.
 
-  if (not isRvd() or (not isZfhLegal() and not isZfhminLegal()))
+  if (not isRvd())
     {
       illegalInst(di);
       return;
     }
 
-  if (not checkRoundingModeHp(di))
+  if (not checkRoundingModeHpmin(di))
     return;
 
   double d1 = fpRegs_.readDouble(di->op1());

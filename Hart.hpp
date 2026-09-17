@@ -3927,6 +3927,10 @@ namespace WdRiscv
     /// extension) instructions.
     bool checkRoundingModeHp(const DecodedInst* di);
 
+    /// Similar to checkRoundingModeHp but laxer: legal when either zfh
+    /// or zfhmin extension is enabled.
+    bool checkRoundingModeHpmin(const DecodedInst* di);
+
     /// Similar to checkRoundingModeSp but for for double-precision (D
     /// extension) instructions.
     bool checkRoundingModeDp(const DecodedInst* di);
