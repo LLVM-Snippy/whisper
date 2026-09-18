@@ -1636,8 +1636,10 @@ Iommu::translate(const IommuRequest& req, uint64_t& pa, unsigned& cause,
         cause = 5; // load access fault
       else if (req.isWrite() and not (isPmpWritable(pa) and isPmaWritable(pa)))
         cause = 7; // store/amo access fault
-      else
+      if (cause == 0)
         return true;
+      if (pbmtInfo and not pbmtInfo->empty())
+        pbmtInfo->pop_back();  // Pmp/pma fail: remove SPA entry as requested by DV.
     }
 
   // 3.6: For PCIe ATS translation requests, no faults are logged on these errors.
@@ -2102,7 +2104,13 @@ Iommu::translate_(const IommuRequest& req, uint64_t& pa, unsigned& cause, bool& 
   if (not stage2Translate(iohgatp, effPriv, req.isRead(), req.isWrite(),
                           req.isExec(), gpa, dc.gade(), dc.sxl(), pa, cause, false /* isPdtAccess */,
                           attribs ? &s2Attribs : nullptr))
-    return false;
+    {
+      // Remove the GPA entry (last entry) added by getStage1Pbmt.
+      if (pbmtInfo and not pbmtInfo->empty())
+        pbmtInfo->pop_back();
+      return false;
+    }
+
   getStage2Pbmt(pbmtInfo);
 
   // Count G-stage page table walk event after successful second-stage translation
@@ -2234,9 +2242,11 @@ Iommu::msiTranslate(const DeviceContext& dc, const IommuRequest& req,
   //    fault" (cause = 261).
   uint64_t pteAddr = mm | (ii * 16);
   uint64_t pte0 = 0, pte1 = 0;
-  bool corrupted = false;
-  if (not memRead(pteAddr, 8, bigEnd, pte0, corrupted) or not memRead(pteAddr+8, 8, bigEnd, pte1, corrupted))
+  bool corrupted0 = false, corrupted1 = false;
+  if (not memRead(pteAddr, 8, bigEnd, pte0, corrupted0) or
+      not memRead(pteAddr+8, 8, bigEnd, pte1, corrupted1))
     {
+      bool corrupted = corrupted0 or corrupted1;
       cause = corrupted ? 270 : 261;
       return false;
     }
@@ -2712,9 +2722,9 @@ Iommu::processCommand()
   AtsCommandData cmdData;
 
   bool bigEnd = fctl_.fields.be;
-  bool corrupted = false;
-  if (!memRead(cmdAddr,     8, bigEnd, cmdData.dw0, corrupted) ||
-      !memRead(cmdAddr + 8, 8, bigEnd, cmdData.dw1, corrupted))
+  bool corrupted0 = false, corrupted1 = false;
+  if (!memRead(cmdAddr,     8, bigEnd, cmdData.dw0, corrupted0) or
+      !memRead(cmdAddr + 8, 8, bigEnd, cmdData.dw1, corrupted1))
     {
       cqcsr_.fields.cqmf = 1;
       updateIpsr();

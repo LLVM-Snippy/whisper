@@ -10,6 +10,10 @@
 using namespace WdRiscv;
 using TT_STEE::Stee;
 
+// Defined in CsRegs.cpp: true if the given MISELECT/SISELECT/VSISELECT value
+// falls in the select range associated with an IMSIC.
+bool isImsicSelect(uint64_t sel);
+
 //NOLINTNEXTLINE(bugprone-reserved-identifier, cppcoreguidelines-avoid-non-const-global-variables)
 void (*__tracerExtension)(void*) = nullptr;
 
@@ -277,8 +281,7 @@ printPageTableWalk(FILE* out, const Hart<URV>& hart, const char* tag,
 
 template <typename URV>
 void
-Hart<URV>::printInstTrace(uint32_t inst, uint64_t tag, std::string& tmp,
-			  FILE* out)
+Hart<URV>::printInstTrace(uint32_t inst, uint64_t tag, uint64_t ppc, std::string& tmp, FILE* out)
 {
   if (not out and not __tracerExtension)
     return;
@@ -290,8 +293,7 @@ Hart<URV>::printInstTrace(uint32_t inst, uint64_t tag, std::string& tmp,
   else
     {
       DecodedInst di;
-      uint64_t physPc = currPc_;
-      decode(currPc_, physPc, inst, di);
+      decode(currPc_, ppc, inst, di);
       printDecodedInstTrace(di, tag, tmp, out);
     }
 }
@@ -342,6 +344,16 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
       oss << "0x" << std::hex << ldStAddr_;
       if (ldStPhysAddr1_ != ldStAddr_)
 	oss << ":0x" << ldStPhysAddr1_;
+
+      auto pma = getPma(ldStPhysAddr1_);
+      auto sep = "";
+      if (not pma.isCacheable())
+        {
+          oss << ",nc";
+          sep = ",";
+        }
+      if (pma.isIo())
+        oss << sep << "io";
       tmp += " [" + oss.str() + "]";
     }
   else
@@ -356,8 +368,11 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
 	  for (uint64_t i = 0; i < elems.size(); ++i)
 	    {
 	      auto& einfo = elems.at(i);
-              if (not vecInfo.isLoad_ and einfo.skip_)
-                continue;  // Non-active vector store element.
+              // Don't log skipped elements unless requested by used.
+              if ( einfo.skip_ and
+                   ((vecInfo.isLoad_ and not logMaskedVecLoad_) or
+                    (not vecInfo.isLoad_ and not logMaskedVecStore_)) )
+                    continue;
               oss << sep;
               sep = ";";
 	      oss << "0x" << std::hex << einfo.va_;
@@ -365,7 +380,16 @@ Hart<URV>::printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::strin
 		oss << ":0x" << einfo.pa_;
 	      if (not vecInfo.isLoad_)
 		oss << '=' << "0x" << std::setfill('0') << std::setw(num_nibbles) << einfo.data_;
-	    }
+              auto pma = getPma(einfo.pa_);
+              auto sep = "";
+              if (not pma.isCacheable())
+                {
+                  oss << ",nc";
+                  sep = ",";
+                }
+              if (pma.isIo())
+                oss << sep << "io";
+            }
 	  tmp += " [" + oss.str() + "]";
 	}
     }
@@ -604,6 +628,65 @@ namespace Whisper
 }
 
 
+// Emit changes to indirectly-accessed registers as n<select>=<value>.
+// This includes changes due to explicit CSR writes, as well as changes
+// to IMSIC interrupt pending bits driven by message signaled interrupts.
+template <typename URV>
+static void
+printIndirectRegChanges(Hart<URV>& hart, const DecodedInst& di,
+                        const std::vector<CsrNumber>& csrns,
+                        Whisper::PrintBuffer& buffer, unsigned& regCount)
+{
+  auto imsic = hart.imsic();
+  bool imsicTrace = imsic and imsic->traceEnabled();
+
+  for (auto csrn : csrns)
+    {
+      CsrNumber selCsr = CsrNumber::MISELECT;
+      if (isSiregCsr(csrn))
+        selCsr = CsrNumber::SISELECT;
+      else if (isVsiregCsr(csrn))
+        selCsr = CsrNumber::VSISELECT;
+      else if (not isMiregCsr(csrn))
+        continue;
+
+      URV sel = hart.peekCsr(selCsr);
+      if (imsicTrace and isImsicSelect(sel))
+        continue;  // Reported by the IMSIC pass below.
+      if (regCount) buffer.printChar(';');
+      buffer.printChar('n').print(uint64_t(sel)).printChar('=').print(hart.peekCsr(csrn));
+      regCount++;
+    }
+
+  // IMSIC tracing in a separate pass that also captures the effect of MSI writes
+  if (imsicTrace)
+    {
+      TraceRecord<URV> tr(&hart, di);
+      std::vector<std::pair<URV, uint64_t>> mcvps, scvps;
+      std::vector<std::vector<std::pair<URV, uint64_t>>> gcvps;
+      std::vector<unsigned> minterrupts, sinterrupts;
+      std::vector<std::vector<unsigned>> ginterrupts;
+      tr.getImsicChanges(mcvps, scvps, gcvps, minterrupts, sinterrupts, ginterrupts);
+
+      auto printIregs = [&buffer, &regCount](const std::vector<std::pair<URV, uint64_t>>& cvps) {
+        for (auto [select, value] : cvps)
+          {
+            if (regCount) buffer.printChar(';');
+            buffer.printChar('n').print(uint64_t(select)).printChar('=').print(value);
+            regCount++;
+          }
+      };
+
+      printIregs(mcvps);
+      printIregs(scvps);
+      for (const auto& gcvp : gcvps)
+        printIregs(gcvp);
+
+      imsic->clearTrace();
+    }
+}
+
+
 template <typename URV>
 void
 Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
@@ -685,6 +768,9 @@ Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
       buffer.printChar('c').print(std::to_string(unsigned(csrn))).printChar('=').print(val);
       regCount++;
     }
+
+  // Changed indirectly-accessed registers (n<select>=<value>).
+  printIndirectRegChanges(*this, di, csrns, buffer, regCount);
 
   // Changed vector register group.
   unsigned groupSize = 0;
@@ -981,9 +1067,10 @@ Hart<URV>::logStop(const CoreException& ce, uint64_t counter, FILE* traceFile)
       retireCount_++;
 
       uint32_t inst = 0;
-      readInst(currPc_, inst);
+      uint64_t pa = 0;
+      readInst(currPc_, pa, inst);
       std::string instStr;
-      printInstTrace(inst, counter, instStr, traceFile);
+      printInstTrace(inst, counter, pa, instStr, traceFile);
     }
 
   using std::cerr;

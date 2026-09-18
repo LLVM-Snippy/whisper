@@ -568,8 +568,25 @@ Hart<URV>::processExtensions(bool verbose)
   flag = flag and isa_.isEnabled(RvExtension::H);
   enableHypervisorMode(flag);
 
-  flag = (value & 1) and isa_.isEnabled(RvExtension::A);   // Atomic
-  enableExtension(RvExtension::A, flag);
+  flag = value & 1;  // MISA.A  : AMO
+  enableExtension(RvExtension::Zaamo, isa_.isEnabled(RvExtension::Zaamo));
+  enableExtension(RvExtension::Zalrsc, isa_.isEnabled(RvExtension::Zalrsc));
+
+  // Zabha depends on Zaamo.
+  bool isaZabha = isa_.isEnabled(RvExtension::Zaamo) and isa_.isEnabled(RvExtension::Zaamo);
+  enableExtension(RvExtension::Zabha, isaZabha);
+
+  enableExtension(RvExtension::Zaamo, isaZabha);
+  if (isa_.isEnabled(RvExtension::A))
+    {
+      enableExtension(RvExtension::A, flag);
+      enableExtension(RvExtension::Zaamo, flag);
+      enableExtension(RvExtension::Zalrsc, flag);
+      if (isaZabha)
+        enableExtension(RvExtension::Zabha, flag);
+    }
+  else if (flag)
+    std::cerr << "Warning: Amo extension (A) is not in the ISA string yet MISA.A is being set.\n";
 
   flag = (value & 2) and isa_.isEnabled(RvExtension::B);   // Bit-manip
   enableExtension(RvExtension::B, flag);
@@ -606,8 +623,14 @@ Hart<URV>::processExtensions(bool verbose)
 	      << " but extension is mandatory -- assuming bit 8 set\n";
 
   flag = value & (URV(1) << ('m' - 'a'));
-  flag = flag and isa_.isEnabled(RvExtension::M);
-  enableExtension(RvExtension::M, flag);
+  enableExtension(RvExtension::Zmmul, isa_.isEnabled(RvExtension::Zmmul));
+  if (isa_.isEnabled(RvExtension::M))
+    {
+      enableExtension(RvExtension::M, flag);
+      enableExtension(RvExtension::Zmmul, flag);
+    }
+  else if (flag)
+    std::cerr << "Warning: Multiply extension (M) is not in the ISA string yet MISA.M is being set.\n";
 
   flag = value & (URV(1) << ('v' - 'a'));  // User-mode option.
   if (flag and not (extensionIsEnabled(RvExtension::F) and extensionIsEnabled(RvExtension::D)))
@@ -650,7 +673,6 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Zicboz,   isa_.isEnabled(RvExtension::Zicboz));
   enableExtension(RvExtension::Zicbop,   isa_.isEnabled(RvExtension::Zicbop));
   enableExtension(RvExtension::Zawrs,    isa_.isEnabled(RvExtension::Zawrs));
-  enableExtension(RvExtension::Zmmul,    isa_.isEnabled(RvExtension::Zmmul));
   enableExtension(RvExtension::Zvbb,     isa_.isEnabled(RvExtension::Zvbb));
   enableExtension(RvExtension::Zvbc,     isa_.isEnabled(RvExtension::Zvbc));
   enableExtension(RvExtension::Zvfbfmin, isa_.isEnabled(RvExtension::Zvfbfmin));
@@ -678,9 +700,6 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Ssaia,    isa_.isEnabled(RvExtension::Ssaia));
   enableExtension(RvExtension::Zicsr,    true /*isa_.isEnabled(RvExtension::Zicsr)*/); // Default true until we fix riscof
   enableExtension(RvExtension::Zifencei, true /*isa_.isEnabled(RvExtension::Zifencei)*/); // Default true until RTL catches up
-  enableExtension(RvExtension::Zaamo,    isa_.isEnabled(RvExtension::Zaamo));
-  enableExtension(RvExtension::Zalrsc,   isa_.isEnabled(RvExtension::Zalrsc));
-  enableExtension(RvExtension::Zabha,    isa_.isEnabled(RvExtension::Zabha));
   enableExtension(RvExtension::Zalasr,   isa_.isEnabled(RvExtension::Zalasr));
   enableExtension(RvExtension::Zilsd,    isa_.isEnabled(RvExtension::Zilsd));
   enableExtension(RvExtension::Zclsd,    isa_.isEnabled(RvExtension::Zclsd));
@@ -3093,7 +3112,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
       pa = stee_.clearSecureBits(pa);
     }
 
-  if (not pmaMgr_.accessPma(pa).isExec())
+  auto pma = pmaMgr_.accessPma(pa);
+  if (not pma.isExec())
     return ExceptionCause::INST_ACC_FAULT;
 
   bool wordAligned = (pa & 3) == 0;
@@ -3107,7 +3127,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
       // Override with MCM fetch cache. Complain if missing leaving opcode unomdified.
       // If line is io/nc, we cache it anyway counting on the test-bench to evict it.
       if (umfc and not readInstFromFetchCache(pa, inst))
-        mcm_->reportMissingFetch(*this, execCount_, pa);
+        if (pma.isCacheable() and not pma.isIo())
+          mcm_->reportMissingFetch(*this, execCount_, pa);
 
       if (initStateFile_)
 	dumpInitState("fetch", va, pa);
@@ -3124,7 +3145,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
     return ExceptionCause::INST_ACC_FAULT;
 
   if (umfc and not readInstFromFetchCache(pa, half))
-    mcm_->reportMissingFetch(*this, execCount_, pa);
+    if (pma.isCacheable() and not pma.isIo())
+      mcm_->reportMissingFetch(*this, execCount_, pa);
 
   if (initStateFile_)
     dumpInitState("fetch", va, pa);
@@ -3173,7 +3195,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
         }
     }
 
-  if (not pmaMgr_.accessPma(pa2).isExec())
+  auto pma2 = pmaMgr_.accessPma(pa2);
+  if (not pma2.isExec())
     {
       va += 2;  // To report faulting portion of fetch.
       return ExceptionCause::INST_ACC_FAULT;
@@ -3187,7 +3210,8 @@ Hart<URV>::fetchInstNoTrap(uint64_t& va, uint64_t& pa, [[maybe_unused]] uint64_t
     }
 
   if (umfc and not readInstFromFetchCache(pa2, upperHalf))
-    mcm_->reportMissingFetch(*this, execCount_, pa2);
+    if (pma2.isCacheable() and not pma2.isIo())
+      mcm_->reportMissingFetch(*this, execCount_, pa2);
 
   if (initStateFile_)
     dumpInitState("fetch", va, pa2);
@@ -5760,7 +5784,7 @@ Hart<URV>::lastCsr(std::vector<CsrNumber>& csrs,
 
 template <typename URV>
 void
-handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd);
+handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd, bool notifyStop);
 
 
 // Return true if debug mode is entered and false otherwise.
@@ -5797,8 +5821,9 @@ Hart<URV>::takeTriggerAction(FILE* traceFile, URV pc, URV info,
       else
         {
           uint32_t inst = 0;
-          readInst(currPc_, inst);
-          printInstTrace(inst, instrTag, instStr, traceFile);
+          uint64_t ppc = 0;  // Physical pc. Set by readInst.
+          readInst(currPc_, ppc, inst);
+          printInstTrace(inst, instrTag, ppc, instStr, traceFile);
         }
     }
 
@@ -5937,6 +5962,7 @@ Hart<URV>::fetchInstWithTrigger(URV addr, uint64_t& physAddr, uint32_t& inst, FI
   setMemProtAccIsFetch(true);
 
   // Fetch instruction.
+  physAddr = addr;
   bool fetch = fetchInst(addr, physAddr, inst);
   if (not fetch or
       (injectException_ != ExceptionCause::NONE and not injectExceptionIsLd_))
@@ -5955,7 +5981,7 @@ Hart<URV>::fetchInstWithTrigger(URV addr, uint64_t& physAddr, uint32_t& inst, FI
         }
 
       std::string instStr;
-      printInstTrace(inst, execCount_, instStr, file);
+      printInstTrace(inst, execCount_, physAddr, instStr, file);
       return false;  // Next instruction in trap handler.
     }
 
@@ -5996,7 +6022,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
   unsigned gdbCount = 0, gdbLimit = 1000000;
 
   if (enableGdb_)
-    handleExceptionForGdb(*this, gdbInputFd_);
+    handleExceptionForGdb(*this, gdbInputFd_, false /*notifyStop*/);
 
   uint64_t& effectiveInstCounter = hasRoiTraceEnabled()? traceCount_ : execCount_;
 
@@ -6014,7 +6040,7 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
           gdbCount = 0;
           if (hasPendingInput(gdbInputFd_))
             {
-              handleExceptionForGdb(*this, gdbInputFd_);
+              handleExceptionForGdb(*this, gdbInputFd_, true /*notifyStop*/);
               continue;
             }
         }
@@ -6048,8 +6074,6 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 	  currPc_ = pc_;
 
 	  ++execCount_;
-	  if (mcycleEnabled())
-	    ++cycleCount_;
 
           if (hasActiveTrigger() and icountTriggerFired() and breakpOrEnterDebugTripped())
             {
@@ -6099,8 +6123,11 @@ Hart<URV>::untilAddress(uint64_t address, FILE* traceFile)
 
           // Increment pc and execute instruction
 	  pc_ += di->instSize();
-    auto incMinstret = minstretEnabled();
+          auto incMinstret = minstretEnabled();
 	  execute(di);
+
+	  if (mcycleEnabled())
+	    ++cycleCount_;
 
           if (hasActiveTrigger())
             evaluateIcountTrigger();
@@ -6415,9 +6442,6 @@ Hart<URV>::simpleRunWithLimit()
       currPc_ = pc_;
       ++execCount_;
 
-      if (mcycleEnabled())
-	++cycleCount_;
-
       if ((effectiveMie_ or
           (privMode_ != PrivilegeMode::Machine and effectiveSie_) or
           (virtMode_ and (effectiveVsie_ or hasHvi())))
@@ -6438,6 +6462,9 @@ Hart<URV>::simpleRunWithLimit()
       pc_ += di->instSize();
       auto incMinstret = minstretEnabled();
       execute(di);
+
+      if (mcycleEnabled())
+	++cycleCount_;
 
       if (not hasException_)
         {
@@ -7164,8 +7191,9 @@ Hart<URV>::processNmi(FILE* traceFile, std::string& instStr)
       if (initiateNmi(URV(nmi), pc_))
         {
           uint32_t inst = 0; // Load interrupted inst.
-          readInst(currPc_, inst);
-          printInstTrace(inst, execCount_, instStr, traceFile);
+          uint64_t ppc = 0;  // Physical PC. Set by readInst.
+          readInst(currPc_, ppc, inst);
+          printInstTrace(inst, execCount_, ppc, instStr, traceFile);
           if (mcycleEnabled())
             ++cycleCount_;
           return true;
@@ -7181,8 +7209,9 @@ Hart<URV>::processNmi(FILE* traceFile, std::string& instStr)
       if (initiateNmi(URV(nmi), pc_))
         {
           uint32_t inst = 0; // Load interrupted inst.
-          readInst(currPc_, inst);
-          printInstTrace(inst, execCount_, instStr, traceFile);
+          uint64_t ppc = 0;  // Physical PC. Set by readInst.
+          readInst(currPc_, ppc, inst);
+          printInstTrace(inst, execCount_, ppc, instStr, traceFile);
           if (mcycleEnabled())
             ++cycleCount_;
           return true;
@@ -7234,7 +7263,7 @@ Hart<URV>::processExternalInterrupt(FILE* traceFile, std::string& instStr)
 #endif
 	}
       initiateInterrupt(cause, nextMode, nextVirt, pc, hvi);
-      printInstTrace(inst, execCount_, instStr, traceFile);
+      printInstTrace(inst, execCount_, physPc, instStr, traceFile);
       if (mcycleEnabled())
 	++cycleCount_;
       return true;
@@ -7255,7 +7284,7 @@ Hart<URV>::processTimerInterrupt()
   if (not timerStateStale_ and not vstimecmpActive_ and time_ < nextTimerDeadline_)
     return;
 
-  URV mipVal = csRegs_.overrideWithMvip(csRegs_.peekMip());
+  URV mipVal = csRegs_.overrideWithMvip(csRegs_.peekMipRaw());
   URV prev = mipVal;
 
   if (mtipEnabled_)
@@ -7418,8 +7447,6 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
       resetExecInfo(); clearTraceData();
 
       ++execCount_;
-      if (mcycleEnabled())
-	++cycleCount_;
 
       if (hasActiveTrigger() and icountTriggerFired() and breakpOrEnterDebugTripped())
         {
@@ -7467,6 +7494,9 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
       execute(&di);
       injectException_ = ExceptionCause::NONE;
 
+      if (mcycleEnabled())
+	++cycleCount_;
+
       if (hasActiveTrigger())
         evaluateIcountTrigger();
 
@@ -7494,7 +7524,7 @@ Hart<URV>::singleStep(DecodedInst& di, FILE* traceFile)
 
       if (doStats)
 	accumulateInstructionStats(di);
-      printInstTrace(inst, execCount_, instStr, traceFile);
+      printInstTrace(inst, execCount_, di.physAddress(), instStr, traceFile);
 
       if (sdtrigOn_)
         evaluateDebugStep();
@@ -11079,16 +11109,32 @@ Hart<URV>::execute(const DecodedInst* di)
       execVabd_vv(di);
       return;
 
+    case InstId::vabd_vx:
+      execVabd_vx(di);
+      return;
+
     case InstId::vabdu_vv:
       execVabdu_vv(di);
+      return;
+
+    case InstId::vabdu_vx:
+      execVabdu_vx(di);
       return;
 
     case InstId::vwabda_vv:
       execVwabda_vv(di);
       return;
 
+    case InstId::vwabda_vx:
+      execVwabda_vx(di);
+      return;
+
     case InstId::vwabdau_vv:
       execVwabdau_vv(di);
+      return;
+
+    case InstId::vwabdau_vx:
+      execVwabdau_vx(di);
       return;
 
     case InstId::sinval_vma:
@@ -12019,7 +12065,7 @@ Hart<URV>::execEbreak(const DecodedInst* di)
   if (enableGdb_)
     {
       setPc(currPc_);
-      handleExceptionForGdb(*this, gdbInputFd_);
+      handleExceptionForGdb(*this, gdbInputFd_, true /*notifyStop*/);
       return;
     }
 
@@ -12265,7 +12311,7 @@ namespace WdRiscv
     fields.bits_.MPIE = 1;
 
     // 1.3. Clear MPRV.
-    if (savedMode != PrivilegeMode::Machine and clearMprvOnRet_)
+    if (savedMode != PrivilegeMode::Machine)
       fields.bits_.MPRV = 0;
 
     // 1.4. Clear virtual (V) mode.
@@ -12356,7 +12402,7 @@ namespace WdRiscv
     fields.bits_.MPIE = 1;
 
     // 1.3. Clear MPRV.
-    if (savedMode != PrivilegeMode::Machine and clearMprvOnRet_)
+    if (savedMode != PrivilegeMode::Machine)
       fields.bits_.MPRV = 0;
 
     // 1.4. Clear virtual (V) mode.
@@ -12480,9 +12526,14 @@ Hart<URV>::execSret(const DecodedInst* di)
   if (not csRegs_.write(CsrNumber::SSTATUS, privMode_, fields.value_))
     assert(0 && "Error: Assertion failed");
 
-  // Clear MPRV
-  if (savedMode != PrivilegeMode::Machine and clearMprvOnRet_)
-    csRegs_.poke(CsrNumber::SSTATUS, fields.value_, virtMode_);
+  // Clear MPRV (priv spec: if y≠M, xRET sets MPRV=0). For sret, y (SSTATUS.spp) is always
+  // different than M.
+  updateCachedMstatus();
+  if (mstatus_.bits_.MPRV)
+    {
+      mstatus_.bits_.MPRV = 0;
+      writeMstatus();
+    }
 
   updateCachedSstatus();
 
@@ -12602,55 +12653,7 @@ template <typename URV>
 void
 Hart<URV>::execWfi(const DecodedInst* di)
 {
-#if 1
-
-  // Remove when RTL is ready.
-
   using PM = PrivilegeMode;
-  auto pm = privilegeMode();
-
-  if (pm == PM::Machine)
-    return;
-
-  if (mstatus_.bits_.TW)
-    {
-      // TW is 1 and Executing in privilege less than machine: illegal unless
-      // complete in bounded time.
-      if (wfiTimeout_ == 0)
-	illegalInst(di);
-      return;
-    }
-
-  // TW is 0.
-  if (pm == PM::User and isRvs())
-    {
-      if (virtMode_)
-	virtualInst(di);   // VU mode and TW=0. Section 9.6 of privilege spec.
-      else if (wfiTimeout_ == 0)
-	illegalInst(di);
-      return;
-    }
-
-
-  // VS mode, VTW=1 and mstatus.TW=0
-  if (virtMode_ and pm == PM::Supervisor and hstatus_.bits_.VTW)
-    {
-      if (wfiTimeout_ == 0)
-	virtualInst(di);
-      return;
-    }
-
-#else
-
-  // Enable when RTL is ready.
-
-  // If running standalone, we assume that the WFI timeout (if any) has expired. If
-  // running with an external agent (e.g. test-bench), we assume that the agent will poke
-  // MIP with an interrupt (if any) before we get here so by the time we get here the
-  // wfi timeout has expired.
-
-  using PM = PrivilegeMode;
-
   auto pm = privilegeMode();
 
   if (pm == PM::Machine)
@@ -12659,32 +12662,48 @@ Hart<URV>::execWfi(const DecodedInst* di)
   bool tw = mstatus_.bits_.TW;
   bool vtw = hstatus_.bits_.VTW;
 
-  if (not virtMode_)
+  if (tw)
     {
-      if (pm == PM::Supervisor and not tw)
-	return;
-      illegalInst(di);   // Supervisor or User mode. Timeout expired.
+      // TW is 1 and Executing in privilege less than machine: illegal unless
+      // complete in bounded time.
+      illegalInst(di);  // FIX: handle bounded time.
       return;
     }
 
-  if (pm == PM::Supervisor)   // VS mode
+  // TW is 0.
+
+  if (virtMode_)
     {
-      if (not vtw and not tw)
-	return;
-      if (vtw and not tw)
-	virtualInst(di);
-      else if (tw)
+      if (pm == PM::Supervisor)
+        {
+          // Spec: In VS-mode, attempts to execute WFI when hstatus.VTW=1 and mstatus.TW=0
+          // raise a virtual-instruction exception, unless the instruction completes within an
+          // implementation-specific, bounded time.
+          if (vtw)  // TW is 0
+            {
+              // FIX: handle bounded time.
+              virtualInst(di);
+              return;
+            }
+        }
+      else if (pm == PM::User)
+        {
+          // Spec (when to raise virtual instruction):
+          //  in VU-mode, attempts to execute WFI when mstatus.TW=0
+          virtualInst(di);  // TW is 0
+          return;
+        }
+    }
+
+  // Spec: When S-mode is implemented, then executing WFI in U-mode causes an
+  // illegal-instruction exception, regardless of the value of the TW bit, unless the
+  // instruction completes within an implementation-specific, bounded time limit.
+  if (pm == PM::User and isRvs() and not virtMode_)
+    {
+      if (wfiTimeout_ == 0)
 	illegalInst(di);
       return;
     }
-
-  // VU mode.
-  if (tw)
-    illegalInst(di);
-  else
-    virtualInst(di);
-
-#endif
 }
 
 
@@ -12730,8 +12749,8 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
             {
               // Section 5.5 of privileged spec. If CSRIND is 1, VS/VU access to
               // vsiselect/vsireg and VU access to sireg should ignore other stateen bits.
-              if (csr == CN::VSIREG or csr == CN::VSISELECT or
-                  (uMode and (csr == CN::SIREG or csr == CN::SISELECT)))
+              if (isVsiregCsr(csr) or csr == CN::VSISELECT or
+                  (uMode and (isSiregCsr(csr) or csr == CN::SISELECT)))
                 {
                   auto mstateen0 = csRegs_.read64(CN::MSTATEEN0);
                   Mstateen0Fields fields{mstateen0};
@@ -12750,7 +12769,7 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
               // or VU-mode to access siselect or sireg* raise a virtual instruction
               // exception, not an illegal instruction exception, regardless of the value
               // of vsiselect or any other mstateen bit.
-              if ((csr == CN::SIREG or csr == CN::SISELECT))
+              if ((isSiregCsr(csr) or csr == CN::SISELECT))
                 {
                   auto hse0 = csRegs_.read64(CN::HSTATEEN0);
                   auto mse0 = csRegs_.read64(CN::MSTATEEN0);
@@ -12802,7 +12821,7 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
             }
 
           // Section 2.5 of AIA. Check if MSTATEEN/HSTATEEN allow access.
-          if (csRegs_.stateenOn_ and virtMode_ and (csr == CN::SIREG or csr == CN::SISELECT))
+          if (csRegs_.stateenOn_ and virtMode_ and (isSiregCsr(csr) or csr == CN::SISELECT))
             {
               auto hstateen0 = csRegs_.read64(CsrNumber::HSTATEEN0);
               Mstateen0Fields fields{hstateen0};
@@ -12841,8 +12860,8 @@ Hart<URV>::checkCsrAccess(const DecodedInst* di, CsrNumber csr, bool isWrite)
 
   if (virtMode_)
     {
-      if (isRvaia() and ((csr == CN::VSIREG or csr == CN::VSISELECT) or
-                         (uMode and (csr == CN::SIREG or csr == CN::SISELECT))))
+      if (isRvaia() and ((isVsiregCsr(csr) or csr == CN::VSISELECT) or
+                         (uMode and (isSiregCsr(csr) or csr == CN::SISELECT))))
         {
           virtualInst(di);
           return false;  // Section 2.3 of interrupt spec and section 5.4 of of privileged spec.
@@ -12977,6 +12996,14 @@ Hart<URV>::doCsrRead(const DecodedInst* di, CsrNumber csr, bool isWrite, URV& va
   if (csRegs_.read(csr, privMode_, value))
     return true;
 
+  // Unimplemented *iselect: spec leaves behavior unspecified. Default is to trap
+  // (below). When nop_ireg_on_oob_iselect is set, treat as a successful read of zero.
+  if (nopIregOnOobIselect_ and isIregCsr(csr))
+    {
+      value = 0;
+      return true;
+    }
+
   // Check if HS qualified (section 9.6.1 of privileged spec).
   using PM = PrivilegeMode;
   bool hsq = isRvs() and csRegs_.isReadable(csr, PM::Supervisor, false /*virtMode*/);
@@ -13002,7 +13029,7 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
   if (imsic_)
     {
       bool guestTopei = csr == CN::VSTOPEI or (csr == CN::STOPEI and virtMode);
-      bool guestIreg  = csr == CN::VSIREG or (csr == CN::SIREG and virtMode);
+      bool guestIreg  = isVsiregCsr(csr) or (isSiregCsr(csr) and virtMode);
       bool invalidVgein = not hstatus_.bits_.VGEIN or hstatus_.bits_.VGEIN >= imsic_->guestCount();
 
       if (guestTopei and invalidVgein)
@@ -13014,7 +13041,7 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
           return true;
 	}
 
-      if (csr == CN::MIREG or csr == CN::SIREG or csr == CN::VSIREG)
+      if (isIregCsr(csr))
         {
           if (privMode_ == PM::User and not virtMode_)  // U mode
             {
@@ -13022,9 +13049,8 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
               return true;
             }
 
-          CN iselect = CsRegs<URV>::advance(csr, -1);
-          if (guestIreg)
-            iselect = CN::VSISELECT;
+          CN iselect = isMiregCsr(csr) ? CN::MISELECT
+                     : (guestIreg ? CN::VSISELECT : CN::SISELECT);
 
           URV sel = 0;
           if (not peekCsr(iselect, sel))
@@ -13039,67 +13065,83 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
           /// Check if value in xISELECT is for imsic.
           bool imsicSel = csRegs_.isImsicSelectStrict(sel);
 
-          if (TT_IMSIC::Imsic::isFileSelReserved(sel))
+          bool reserved = TT_IMSIC::Imsic::isFileSelReserved(sel);
+          bool inaccessibleSel = not TT_IMSIC::Imsic::isFileSelAccessible<URV>(sel, guestIreg);
+          bool oobIselect = reserved or inaccessibleSel;
+
+          if (oobIselect and not nopIregOnOobIselect_)
             {
-              if (imsicSel and iselect == CN::MISELECT and csr == CN::MIREG)
+              if (reserved)
                 {
-                  illegalInst(di);
-                  return true;
+                  if (imsicSel and iselect == CN::MISELECT and isMiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (imsicSel and iselect == CN::SISELECT and isSiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (imsicSel and iselect == CN::VSISELECT)
+                    {
+                      // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
+                      // vsireg, or from VS-mode to access sireg (really vsireg), should
+                      // preferably raise an illegal instruction exception. This was in the
+                      // 2023 version but was removed from the 2025 version implying that it
+                      // became implementation dependent. We kept it.
+                      if ((isMhs and isVsiregCsr(csr)) or (isVs and isSiregCsr(csr)))
+                        illegalInst(di);
+                      else
+                        virtualInst(di);
+                      return true;
+                    }
                 }
-              if (imsicSel and iselect == CN::SISELECT and csr == CN::SIREG)
+
+              // Sec 2.3, accessing *ireg within a normally valid range with an invalid VGEIN
+              // is deemed inaccessible.  The only other ranges are "reserved", which we
+              // evaluate above.
+              if (inaccessibleSel)
                 {
-                  illegalInst(di);
-                  return true;
-                }
-              if (imsicSel and iselect == CN::VSISELECT)
-                {
-                  // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
-                  // vsireg, or from VS-mode to access sireg (really vsireg), should
-                  // preferably raise an illegal instruction exception. This was in the
-                  // 2023 version but was removed from the 2025 version implying that it
-                  // became implementation dependent. We kept it.
-                  if ((isMhs and csr == CN::VSIREG) or (isVs and csr == CN::SIREG))
-                    illegalInst(di);
-                  else
-                    virtualInst(di);
-                  return true;
+                  if (imsicSel and iselect == CN::MISELECT and isMiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (imsicSel and iselect == CN::SISELECT and isSiregCsr(csr))
+                    {
+                      illegalInst(di);
+                      return true;
+                    }
+                  if (iselect == CN::VSISELECT)
+                    {
+                      // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
+                      // vsireg raise an illegal instruction exception, and attempts from VS-mode
+                      // to access sireg (really vsireg) raise a virtual instruction exception.
+                      if (isVs and isSiregCsr(csr))
+                        virtualInst(di);
+                      else
+                        illegalInst(di);  // Everything else including VSIREG in M/HS mode
+                      return true;
+                    }
                 }
             }
 
-          // Sec 2.3, accessing *ireg within a normally valid range with an invalid VGEIN
-          // is deemed inaccessible.  The only other ranges are "reserved", which we
-          // evaluate above.
-          if (not TT_IMSIC::Imsic::isFileSelAccessible<URV>(sel, guestIreg) or
-              (guestIreg and invalidVgein))
+          // Invalid VGEIN remains a trap even when OOB *iselect is configured as a no-op.
+          if (guestIreg and invalidVgein)
             {
-              if (imsicSel and iselect == CN::MISELECT and csr == CN::MIREG)
-                {
-                  illegalInst(di);
-                  return true;
-                }
-              if (imsicSel and iselect == CN::SISELECT and csr == CN::SIREG)
-                {
-                  illegalInst(di);
-                  return true;
-                }
-              if (iselect == CN::VSISELECT)
-                {
-                  // Sec 2.3 of interrupt spec: attempts from M-mode or HS-mode to access
-                  // vsireg raise an illegal instruction exception, and attempts from VS-mode
-                  // to access sireg (really vsireg) raise a virtual instruction exception.
-                  if (isVs and csr == CN::SIREG)
-                    virtualInst(di);
-                  else
-                    illegalInst(di);  // Everything else including VSIREG in M/HS mode
-                  return true;
-                }
+              if (isVs and isSiregCsr(csr))
+                virtualInst(di);
+              else
+                illegalInst(di);
+              return true;
             }
         }
 
         // From section 5.3, When mvien.SEIP is set, 0x70-0xFF are reserved and stopei
         // are reserved from S-mode.
         bool isS = privMode_ == PM::Supervisor and not virtMode_;
-        if (isS and (csr == CN::STOPEI or csr == CN::SIREG))
+        if (isS and (csr == CN::STOPEI or isSiregCsr(csr)))
           {
             URV mvien = csRegs_.peekMvien();
             if ((mvien >> URV(InterruptCause::S_EXTERNAL)) & 1)
@@ -13111,7 +13153,7 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
                   }
 
                 // sireg
-                CN iselect = CsRegs<URV>::advance(csr, -1);
+                CN iselect = CN::SISELECT;
                 URV sel = 0;
                 if (not peekCsr(iselect, sel))
                   {
@@ -13128,31 +13170,36 @@ Hart<URV>::imsicTrap(const DecodedInst* di, CsrNumber csr, bool virtMode)
               }
           }
     }
-  else if (aclic_ and (csr == CN::MIREG or csr == CN::MTOPEI or
-                        csr == CN::SIREG or csr == CN::STOPEI))
+  else if (aclic_ and (isMiregCsr(csr) or csr == CN::MTOPEI or
+                        isSiregCsr(csr) or csr == CN::STOPEI))
     {
       // No IMSIC, but ACLIC is present.  VSIREG/VSTOPEI are hypervisor CSRs not
       // used by ACLIC and remain illegal.
-      if ((csr == CN::SIREG or csr == CN::STOPEI) and not aclic_->hasSupervisorDomain())
+      if ((isSiregCsr(csr) or csr == CN::STOPEI) and not aclic_->hasSupervisorDomain())
         {
           illegalInst(di);
           return true;
         }
       // For xireg, validate the selector is in an ACLIC-defined range.
-      if (csr == CN::MIREG or csr == CN::SIREG)
+      if (isMiregCsr(csr) or isSiregCsr(csr))
         {
-          CN iselect = CsRegs<URV>::advance(csr, -1);
+          CN iselect = isMiregCsr(csr) ? CN::MISELECT : CN::SISELECT;
           URV sel = 0;
           if (not peekCsr(iselect, sel))
             { illegalInst(di); return true; }
           bool validSel = (sel >= 0x80 and sel <= 0xFF) or (sel >= 0x1000 and sel <= 0x10FF);
           if (not validSel)
-            { illegalInst(di); return true; }
+            {
+              if (nopIregOnOobIselect_)
+                return false;  // No-op: let the subsequent *ireg access read-zero / ignore write.
+              illegalInst(di);
+              return true;
+            }
         }
       // Valid ACLIC access — fall through to return true.
     }
   else if (csr == CN::MTOPEI or csr == CN::STOPEI or csr == CN::VSTOPEI or
-           csr == CN::MIREG or csr == CN::SIREG or csr == CN::VSIREG)
+           isIregCsr(csr))
     {
       illegalInst(di);
       return true;
@@ -13322,6 +13369,10 @@ Hart<URV>::doCsrWrite(const DecodedInst* di, CsrNumber csr, URV val,
   auto lastVal = csRegs_.peek(csr);
   if (not csRegs_.write(csr, privMode_, val))
     {
+      // Unimplemented *iselect: default trap (below). nop_ireg_on_oob_iselect: ignore write.
+      if (nopIregOnOobIselect_ and isIregCsr(csr))
+        return;
+
       // Same HS-qualified illegal/virtual behavior as doCsrRead.
       using PM = PrivilegeMode;
       bool hsq = isRvs() and csRegs_.isReadable(csr, PM::Supervisor, false /*virtMode*/);
@@ -13950,7 +14001,7 @@ template<typename URV>
 void
 Hart<URV>::execMul(const DecodedInst* di)
 {
-  if (not isRvzmmul() and not isRvm())
+  if (not isRvzmmul())
     {
       illegalInst(di);
       return;
@@ -13971,7 +14022,7 @@ namespace WdRiscv
   void
   Hart<uint32_t>::execMulh(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -13990,7 +14041,7 @@ namespace WdRiscv
   void
   Hart<uint32_t>::execMulhsu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14009,7 +14060,7 @@ namespace WdRiscv
   void
   Hart<uint32_t>::execMulhu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14028,7 +14079,7 @@ namespace WdRiscv
   void
   Hart<uint64_t>::execMulh(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14047,7 +14098,7 @@ namespace WdRiscv
   void
   Hart<uint64_t>::execMulhsu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14066,7 +14117,7 @@ namespace WdRiscv
   void
   Hart<uint64_t>::execMulhu(const DecodedInst* di)
   {
-    if (not isRvzmmul() and not isRvm())
+    if (not isRvzmmul())
       {
 	illegalInst(di);
 	return;
@@ -14534,7 +14585,7 @@ template <typename URV>
 void
 Hart<URV>::execMulw(const DecodedInst* di)
 {
-  if (not isRv64() or (not isRvm() and not isRvzmmul()))
+  if (not isRv64() or not isRvzmmul())
     {
       illegalInst(di);
       return;

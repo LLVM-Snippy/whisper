@@ -9,8 +9,9 @@
 namespace WhisperUtil  {
 
   // Operand type: Integer-register, floating-point register, control
-  // and status register, vector register, or immediate value.
-  enum class OperandType { Int, Fp, Csr, Vec, Imm };
+  // and status register, vector register, immediate value, or indirectly
+  // accessed CSR
+  enum class OperandType { Int, Fp, Csr, Vec, Imm, IndirectCsr };
 
   // Processor privilege mod.
   enum class PrivMode { Machine, Supervisor, User };
@@ -406,6 +407,15 @@ namespace WhisperUtil  {
     uint64_t csrValue(unsigned ix) const
     { return csRegs_.at(ix); }
 
+    // Return the current value of the IndirectCSR at the given index/
+    // select number (the index is the value in miselect, siselect,
+    // or vsiselect CSR).  Default to 0 for unmapped register indices.
+    uint64_t indirectCsrValue(unsigned select) const
+    {
+      auto it = indirectCsrs_.find(select);
+      return it == indirectCsrs_.end() ? 0 : it->second;
+    }
+
     // Return the current value of the given vector regiser.  The
     // given regiser index must be less than 32. Note that we return a
     // reference and the referenced data changes with each invocation
@@ -510,6 +520,7 @@ namespace WhisperUtil  {
     std::vector<uint64_t> fpRegs_;
     std::vector<uint64_t> csRegs_;
     std::vector<VecReg>   vecRegs_;
+    std::unordered_map<unsigned, uint64_t> indirectCsrs_;
 
     std::vector<char*> fields_;
     std::vector<char*> subfields_;

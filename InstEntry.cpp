@@ -7053,8 +7053,9 @@ InstTable::setupInstVec()
       },
 
       // Zvabd: Vector absolute difference.
+      // VABS.V is the assembly pseudoinstruction VABD.VX vd, vs2, x0.
       { "vabs.v", InstId::vabs_v,
-        0b010010'0'00000'10000'010'00000'1010111, // Opcode
+        0b010101'0'00000'00000'110'00000'1010111, // Opcode
         0b111111'0'00000'11111'111'00000'1111111, // Mask of opcode bits
         RvExtension::Zvabd, RvFormat::R,
         OperandType::VecReg, OperandMode::Write, rdMask,
@@ -7062,25 +7063,43 @@ InstTable::setupInstVec()
       },
 
       { "vabd.vv", InstId::vabd_vv,
-        0b010001'0'00000'10000'010'00000'1010111, // Opcode
+        0b010101'0'00000'00000'010'00000'1010111, // Opcode
         0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
         RvExtension::Zvabd, RvFormat::R,
         OperandType::VecReg, OperandMode::Write, rdMask,
         OperandType::VecReg, OperandMode::Read, rs1Mask,
         OperandType::VecReg, OperandMode::Read, rs2Mask,
+      },
+
+      { "vabd.vx", InstId::vabd_vx,
+        0b010101'0'00000'00000'110'00000'1010111, // Opcode
+        0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
+        RvExtension::Zvabd, RvFormat::R,
+        OperandType::VecReg, OperandMode::Write, rdMask,
+        OperandType::VecReg, OperandMode::Read, rs1Mask,
+        OperandType::IntReg, OperandMode::Read, rs2Mask,
       },
 
       { "vabdu.vv", InstId::vabdu_vv,
-        0b010011'0'00000'10000'010'00000'1010111, // Opcode
+        0b010110'0'00000'00000'010'00000'1010111, // Opcode
         0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
         RvExtension::Zvabd, RvFormat::R,
         OperandType::VecReg, OperandMode::Write, rdMask,
         OperandType::VecReg, OperandMode::Read, rs1Mask,
         OperandType::VecReg, OperandMode::Read, rs2Mask,
+      },
+
+      { "vabdu.vx", InstId::vabdu_vx,
+        0b010110'0'00000'00000'110'00000'1010111, // Opcode
+        0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
+        RvExtension::Zvabd, RvFormat::R,
+        OperandType::VecReg, OperandMode::Write, rdMask,
+        OperandType::VecReg, OperandMode::Read, rs1Mask,
+        OperandType::IntReg, OperandMode::Read, rs2Mask,
       },
 
       { "vwabda.vv", InstId::vwabda_vv,
-        0b010101'0'00000'10000'010'00000'1010111, // Opcode
+        0b111101'0'00000'00000'000'00000'1010111, // Opcode
         0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
         RvExtension::Zvabd, RvFormat::R,
         OperandType::VecReg, OperandMode::Write, rdMask,
@@ -7088,13 +7107,31 @@ InstTable::setupInstVec()
         OperandType::VecReg, OperandMode::Read, rs2Mask,
       },
 
+      { "vwabda.vx", InstId::vwabda_vx,
+        0b111101'0'00000'00000'100'00000'1010111, // Opcode
+        0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
+        RvExtension::Zvabd, RvFormat::R,
+        OperandType::VecReg, OperandMode::Write, rdMask,
+        OperandType::VecReg, OperandMode::Read, rs1Mask,
+        OperandType::IntReg, OperandMode::Read, rs2Mask,
+      },
+
       { "vwabdau.vv", InstId::vwabdau_vv,
-        0b010110'0'00000'10000'010'00000'1010111, // Opcode
+        0b111110'0'00000'00000'000'00000'1010111, // Opcode
         0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
         RvExtension::Zvabd, RvFormat::R,
         OperandType::VecReg, OperandMode::Write, rdMask,
         OperandType::VecReg, OperandMode::Read, rs1Mask,
         OperandType::VecReg, OperandMode::Read, rs2Mask,
+      },
+
+      { "vwabdau.vx", InstId::vwabdau_vx,
+        0b111110'0'00000'00000'100'00000'1010111, // Opcode
+        0b111111'0'00000'00000'111'00000'1111111, // Mask of opcode bits
+        RvExtension::Zvabd, RvFormat::R,
+        OperandType::VecReg, OperandMode::Write, rdMask,
+        OperandType::VecReg, OperandMode::Read, rs1Mask,
+        OperandType::IntReg, OperandMode::Read, rs2Mask,
       },
 
       // TLB invalidate (svinval)

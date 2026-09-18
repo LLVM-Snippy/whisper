@@ -129,6 +129,26 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
 
   auto& system = *system_;
 
+  // Set instruction count limit. We do this before anything else to guard against the
+  // test bench running the system even when this method returns false.
+  if (args.maxInst)
+    for (unsigned i = 0; i < system.hartCount(); ++i)
+      {
+	auto& hart = *system.ithHart(i);
+	uint64_t count = args.relMaxInst? hart.getInstructionCount() : 0;
+	count += *args.maxInst;
+	hart.setInstructionCountLimit(count, args.maxinstFail);
+      }
+
+  if (args.maxRetInst)
+    for (unsigned i = 0; i < system.hartCount(); ++i)
+      {
+	auto& hart = *system.ithHart(i);
+	uint64_t count = args.relMaxRet? hart.getRetiredInstructionCount() : 0;
+	count += *args.maxRetInst;
+	hart.setRetiredInstructionCountLimit(count);
+      }
+
   // We need to instantiate the APLIC before calling configHarts because the
   // Uart8250 is constructed in configHarts and may store a pointer to the APLIC.
   if (not config.applyAplicConfig(system))
@@ -230,25 +250,6 @@ Session<URV>::configureSystem(const Args& args, const HartConfig& config)
         }
     }
 #endif
-
-  // Set instruction count limit.
-  if (args.maxInst)
-    for (unsigned i = 0; i < system.hartCount(); ++i)
-      {
-	auto& hart = *system.ithHart(i);
-	uint64_t count = args.relMaxInst? hart.getInstructionCount() : 0;
-	count += *args.maxInst;
-	hart.setInstructionCountLimit(count, args.maxinstFail);
-      }
-
-  if (args.maxRetInst)
-    for (unsigned i = 0; i < system.hartCount(); ++i)
-      {
-	auto& hart = *system.ithHart(i);
-	uint64_t count = args.relMaxRet? hart.getRetiredInstructionCount() : 0;
-	count += *args.maxRetInst;
-	hart.setRetiredInstructionCountLimit(count);
-      }
 
   if (not args.initStateFile.empty())
     {

@@ -1019,11 +1019,15 @@ namespace WdRiscv
      vpairo_vv,
 
      // Vector absolute difference (Zvabd)
-     vabs_v,
+     vabs_v,      // Pseudoinstruction: vabd.vx vd, vs2, x0
      vabd_vv,
+     vabd_vx,
      vabdu_vv,
+     vabdu_vx,
      vwabda_vv,
+     vwabda_vx,
      vwabdau_vv,
+     vwabdau_vx,
 
      // TLB invalidate (svinval)
      sinval_vma,

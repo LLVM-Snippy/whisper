@@ -1906,40 +1906,46 @@ CsRegs<URV>::enableSsdbltrp(bool flag)
   uint64_t sdtBit = uint64_t(1) << 24;
 
   // DTE is bit 59 of menvcfg (RV64) / bit 27 of menvcfgh (RV32).
+  // Same for henvcfg/henvcfgh.
   // Controls whether the SDT mechanism is in effect (machine.adoc §menvcfg).
   uint64_t dteBit64 = uint64_t(1) << 59;  // full 64-bit position
   uint32_t dteBit32 = uint32_t(1) << 27;  // high-word position in RV32
 
-  auto menvcfg = findCsr(CN::MENVCFG);
-  if (menvcfg)
+  if constexpr (sizeof(URV) == 8)
     {
-      if constexpr (sizeof(URV) == 8)
+      for (auto csrn : { CN::MENVCFG, CN::HENVCFG } )
         {
-          URV mmask = menvcfg->getReadMask();
-          mmask = flag ? (mmask | URV(dteBit64)) : (mmask & ~URV(dteBit64));
-          menvcfg->setReadMask(mmask);
-          mmask = menvcfg->getWriteMask();
-          mmask = flag ? (mmask | URV(dteBit64)) : (mmask & ~URV(dteBit64));
-          menvcfg->setWriteMask(mmask);
-          mmask = menvcfg->getPokeMask();
-          mmask = flag ? (mmask | URV(dteBit64)) : (mmask & ~URV(dteBit64));
-          menvcfg->setPokeMask(mmask);
+          if (auto cfg = findCsr(csrn); cfg)
+            {
+              URV mask = cfg->getReadMask();
+              mask = flag ? (mask | URV(dteBit64)) : (mask & ~URV(dteBit64));
+              cfg->setReadMask(mask);
+              mask = cfg->getWriteMask();
+              mask = flag ? (mask | URV(dteBit64)) : (mask & ~URV(dteBit64));
+              cfg->setWriteMask(mask);
+              mask = cfg->getPokeMask();
+              mask = flag ? (mask | URV(dteBit64)) : (mask & ~URV(dteBit64));
+              cfg->setPokeMask(mask);
+            }
         }
     }
-
-  // RV32: DTE lives in menvcfgh at bit 27.
-  auto menvcfgh = findCsr(CN::MENVCFGH);
-  if (menvcfgh)
+  else
     {
-      URV hmask = menvcfgh->getReadMask();
-      hmask = flag ? (hmask | URV(dteBit32)) : (hmask & ~URV(dteBit32));
-      menvcfgh->setReadMask(hmask);
-      hmask = menvcfgh->getWriteMask();
-      hmask = flag ? (hmask | URV(dteBit32)) : (hmask & ~URV(dteBit32));
-      menvcfgh->setWriteMask(hmask);
-      hmask = menvcfgh->getPokeMask();
-      hmask = flag ? (hmask | URV(dteBit32)) : (hmask & ~URV(dteBit32));
-      menvcfgh->setPokeMask(hmask);
+      for (auto csrn : { CN::MENVCFGH, CN::HENVCFGH } )
+        {
+          if (auto cfg = findCsr(csrn); cfg)
+            {
+              URV mask = cfg->getReadMask();
+              mask = flag ? (mask | URV(dteBit32)) : (mask & ~URV(dteBit32));
+              cfg->setReadMask(mask);
+              mask = cfg->getWriteMask();
+              mask = flag ? (mask | URV(dteBit32)) : (mask & ~URV(dteBit32));
+              cfg->setWriteMask(mask);
+              mask = cfg->getPokeMask();
+              mask = flag ? (mask | URV(dteBit32)) : (mask & ~URV(dteBit32));
+              cfg->setPokeMask(mask);
+            }
+        }
     }
 
   auto mstatus = findCsr(CN::MSTATUS);
@@ -2052,11 +2058,13 @@ CsRegs<URV>::enableSscofpmf(bool flag)
 	  if (flag)
 	    {
 	      csr->setWriteMask(csr->getWriteMask() | lcof);
+	      csr->setPokeMask(csr->getPokeMask() | lcof);
 	      csr->setReadMask(csr->getReadMask() | lcof);
 	    }
 	  else
 	    {
 	      csr->setWriteMask(csr->getWriteMask() & ~lcof);
+	      csr->setPokeMask(csr->getPokeMask() & ~lcof);
 	      csr->setReadMask(csr->getReadMask() & ~lcof);
 	    }
 	}
@@ -2437,8 +2445,8 @@ CsRegs<URV>::enableZkr(bool flag)
     csr->setImplemented(flag);
 
   MseccfgFields<URV> mf{regs_.at(size_t(CN::MSECCFG)).getReadMask()};
-  mf.bits_.USEED = flag;
-  mf.bits_.SSEED = flag;
+  mf.bits_.USEED = flag and userEnabled_;
+  mf.bits_.SSEED = flag and superEnabled_;
   regs_.at(size_t(CN::MSECCFG)).setReadMask(mf.value_);
 }
 
@@ -3966,6 +3974,7 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
     {
       if (updateVirtInterrupt(value, false))
         {
+          recordWrite(CN::MIP);
           hyperWrite(csr);  // Reflect MIP on HIP
           return true;
         }
@@ -5033,7 +5042,6 @@ CsRegs<URV>::defineSupervisorRegs()
   //                    L           V               E   E  
   URV mask = 0b0'000000'0'0'0'0'1'1'0'00'11'00'11'1'0'0'1'0'0'0'1'0;
   URV pokeMask = mask | (URV(1) << (sizeof(URV)*8 - 1));  // Make SD pokable.
-  pokeMask |= URV(1) << 17;  // Make MPRV pokeable so that SRET can clear it.
   pokeMask |= URV(3) << 15;  // Make XS pokable.
   defineCsr("sstatus",    Csrn::SSTATUS,    !mand, !imp, 0, mask, pokeMask);
 
@@ -6003,6 +6011,13 @@ CsRegs<URV>::peek(CsrNumber num, URV& value, bool virtMode) const
     return readMvip(value);
   if (num == CN::HIP)
     return readHip(value);
+  if (num == CN::MIP)
+    {
+      // MIP.SEIP is not in MIP's storage: the software-writable bit is MVIP's
+      // and the external level is not stored at all.
+      value = effectiveMip();
+      return true;
+    }
 
   value = csr->read();
 
@@ -7009,18 +7024,12 @@ CsRegs<URV>::updateVirtInterrupt(URV value, bool poke)
   if (not mip)
     return false;
 
-  auto prevMip = mip->read();
-
   // We set SEIP in MVIP.
   URV b9 = 0x200;
   if (poke)
     mip->poke(value & ~b9);
   else
-    {
-      mip->write(value & ~b9);
-      if (mip->read() != prevMip)
-        recordWrite(mip->getNumber());
-    }
+    mip->write(value & ~b9);
 
   // All bits from new value of MIP except bit 9.
   value = mip->read() | (value & b9);
@@ -7039,10 +7048,14 @@ CsRegs<URV>::updateVirtInterrupt(URV value, bool poke)
 
       // Write aliasing bits.
       auto prev = mvip->read();
-      mvip->write((mvip->read() & ~mask) | (value & mask));
-      
-      if (mvip->read() != prev)
-        recordWrite(mvip->getNumber());
+      if (poke)
+        mvip->poke((mvip->read() & ~mask) | (value & mask));
+      else
+        {
+          mvip->write((mvip->read() & ~mask) | (value & mask));
+          if (mvip->read() != prev)
+            recordWrite(mvip->getNumber());
+        }
     }
   return true;
 }

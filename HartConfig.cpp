@@ -1001,6 +1001,26 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
         hart.enableTrapOobVstart(flag);
     }
 
+  tag = "log_masked_load";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (not getJsonBoolean(tag, vconf.at(tag), flag))
+        errors++;
+      else
+        hart.logMaskedVecLoad(flag);
+    }
+
+  tag = "log_masked_store";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (not getJsonBoolean(tag, vconf.at(tag), flag))
+        errors++;
+      else
+        hart.logMaskedVecStore(flag);
+    }
+
   if (errors == 0)
     hart.configVector(bytesPerVec, bytesPerElem.at(0), bytesPerElem.at(1), &minBytesPerLmul,
 		      &maxBytesPerLmul);
@@ -2175,9 +2195,6 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
       hart.enableAbiNames(flag);
     }
 
-  // Print memory address of load/store instruction in trace log.
-  // tag = "print_load_store_address";  // Deprecated -- now always true.
-
   // Trace page table walk in log.
   tag = "trace_ptw";
   if (config_ -> contains(tag))
@@ -2583,12 +2600,7 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
 
   tag = "clear_mprv_on_ret";
   if (config_ -> contains(tag))
-    {
-      if (not getJsonBoolean(tag, config_ -> at(tag), flag))
-        errors++;
-      else
-        hart.enableClearMprvOnRet(flag);
-    }
+    cerr << "Warning: Config tag \"" << tag << "\" is deprecated and no longer has any effect\n";
 
   tag = "clear_mtval_on_illegal_instruction";
   if (config_ -> contains(tag))
@@ -2597,6 +2609,18 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
         errors++;
       else
         hart.enableClearMtvalOnIllInst(flag);
+    }
+
+  // Default false: trap on unimplemented *iselect (spec recommended). True: no-op
+  // (read-zero / write-ignore) to match implementations that treat the unspecified
+  // behavior that way (e.g. current Babylon RTL).
+  tag = "nop_ireg_on_oob_iselect";
+  if (config_ -> contains(tag))
+    {
+      if (not getJsonBoolean(tag, config_ -> at(tag), flag))
+        errors++;
+      else
+        hart.enableNopIregOnOobIselect(flag);
     }
 
   tag = "clear_mtval_on_ebreak";
@@ -2650,7 +2674,7 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
   tag = "cancel_lr_on_ret";
   if (config_ -> contains(tag))
     {
-      cerr << "Config tag cancel_lr_on_ret is deprecated. Use cancel_lr_on_trap.\n";
+      cerr << "Warning: Config tag \"cancel_lr_on_ret\" is deprecated. Use cancel_lr_on_trap.\n";
       if (not getJsonBoolean(tag, config_ -> at(tag), flag))
         errors++;
       else
@@ -3087,7 +3111,7 @@ HartConfig::applyAclintConfig(System<URV>& system, Hart<URV>& hart) const
     {
       if (not hasMtimer)
         {
-          std::cerr << "Error: aclint specified time_offset, but no timer_offset\n";
+          std::cerr << "Error: aclint specified time_offset, but no timecmp_offset\n";
           return false;
         }
       if (not getJsonUnsigned("aclint.time_offset", aclint.at(tag), timeOffset))

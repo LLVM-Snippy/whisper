@@ -364,6 +364,8 @@ Decoder::decodeVec(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
         case 0x30: return instTable_.getEntry(InstId::vwredsumu_vs);
         case 0x31: return instTable_.getEntry(InstId::vwredsum_vs);
 	case 0x35: return instTable_.getEntry(InstId::vwsll_vv);
+        case 0x3d: return instTable_.getEntry(InstId::vwabda_vv);
+        case 0x3e: return instTable_.getEntry(InstId::vwabdau_vv);
         default: ;
         }
       return instTable_.getEntry(InstId::illegal);
@@ -514,10 +516,8 @@ Decoder::decodeVec(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           if (op2 == 0x10) return instTable_.getEntry(InstId::vcpop_m);
           if (op2 == 0x11) return instTable_.getEntry(InstId::vfirst_m);
           return instTable_.getEntry(InstId::illegal);
-        case 0x11: return instTable_.getEntry(InstId::vabd_vv);
-        case 0x13: return instTable_.getEntry(InstId::vabdu_vv);
-        case 0x15: return instTable_.getEntry(InstId::vwabda_vv);
-        case 0x16: return instTable_.getEntry(InstId::vwabdau_vv);
+        case 0x15: return instTable_.getEntry(InstId::vabd_vv);
+        case 0x16: return instTable_.getEntry(InstId::vabdu_vv);
         case 0x12:
           if (op2 == 2)  return instTable_.getEntry(InstId::vzext_vf8);
           if (op2 == 4)  return instTable_.getEntry(InstId::vzext_vf4);
@@ -533,7 +533,6 @@ Decoder::decodeVec(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
 	  if (op2 == 13)  return instTable_.getEntry(InstId::vctz_v);
 	  if (op2 == 14)  return instTable_.getEntry(InstId::vcpop_v);
           if (op2 == 15)  return instTable_.getEntry(InstId::vunzipo_v);
-          if (op2 == 16)  return instTable_.getEntry(InstId::vabs_v);
           return instTable_.getEntry(InstId::illegal);
         case 0x14:
           if (op2 == 1)    return instTable_.getEntry(InstId::vmsbf_m);
@@ -709,6 +708,8 @@ Decoder::decodeVec(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
         case 0x2e: return instTable_.getEntry(InstId::vnclipu_wx);
         case 0x2f: return instTable_.getEntry(InstId::vnclip_wx);
 	case 0x35: return instTable_.getEntry(InstId::vwsll_vx);
+        case 0x3d: return instTable_.getEntry(InstId::vwabda_vx);
+        case 0x3e: return instTable_.getEntry(InstId::vwabdau_vx);
         default: ;
         }
       return instTable_.getEntry(InstId::illegal);
@@ -734,6 +735,11 @@ Decoder::decodeVec(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
 	  std::swap(op1, op2); // per spec !
 	  if (op2 == 0) return instTable_.getEntry(InstId::vmv_s_x);
 	  return instTable_.getEntry(InstId::illegal);
+        case 0x15:
+          // VABS.V is the assembly pseudoinstruction VABD.VX vd, vs2, x0.
+          if (op2 == 0) return instTable_.getEntry(InstId::vabs_v);
+          return instTable_.getEntry(InstId::vabd_vx);
+        case 0x16:  return instTable_.getEntry(InstId::vabdu_vx);
         case 0x20:  return instTable_.getEntry(InstId::vdivu_vx);
         case 0x21:  return instTable_.getEntry(InstId::vdiv_vx);
         case 0x22:  return instTable_.getEntry(InstId::vremu_vx);
