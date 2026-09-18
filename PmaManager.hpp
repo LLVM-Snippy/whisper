@@ -1034,8 +1034,7 @@ namespace WdRiscv
       bool cacheable = isCacheable(val);
       bool coherent = isCoherent(val);
 
-      unsigned mtype = memType(val);
-      bool io = mtype != 0;
+      bool io = memType(val) != 0;
 
       unsigned amo = amoType(val);
 
@@ -1048,8 +1047,9 @@ namespace WdRiscv
               return false;   // IO region must have amo-none unless configured otherwise.
           if (write and not read)
             return false;  // Cannot have write without read.
-          if (coherent)
-            return false;  // IO routing constraint.
+          if (not bbl_)
+            if (coherent)
+              return false;  // IO routing constraint.
         }
       else
         {
@@ -1062,8 +1062,9 @@ namespace WdRiscv
             {
               if (amo != 3)
                 return false;   // Cacheable must be amo-arithmetic.
-              if (not coherent)
-                return false;
+              if (not bbl_)
+                if (not coherent)
+                  return false;
             }
           else
             { 

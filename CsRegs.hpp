@@ -510,6 +510,39 @@ namespace WdRiscv
   { return static_cast<unsigned>(a) >= static_cast<unsigned>(b); }
 
 
+  /// True if csr is mireg / mireg2 / ... / mireg6.
+  inline bool
+  isMiregCsr(CsrNumber n)
+  {
+    using CN = CsrNumber;
+    return n == CN::MIREG or n == CN::MIREG2 or n == CN::MIREG3 or
+           n == CN::MIREG4 or n == CN::MIREG5 or n == CN::MIREG6;
+  }
+
+  /// True if csr is sireg / sireg2 / ... / sireg6.
+  inline bool
+  isSiregCsr(CsrNumber n)
+  {
+    using CN = CsrNumber;
+    return n == CN::SIREG or n == CN::SIREG2 or n == CN::SIREG3 or
+           n == CN::SIREG4 or n == CN::SIREG5 or n == CN::SIREG6;
+  }
+
+  /// True if csr is vsireg / vsireg2 / ... / vsireg6.
+  inline bool
+  isVsiregCsr(CsrNumber n)
+  {
+    using CN = CsrNumber;
+    return n == CN::VSIREG or n == CN::VSIREG2 or n == CN::VSIREG3 or
+           n == CN::VSIREG4 or n == CN::VSIREG5 or n == CN::VSIREG6;
+  }
+
+  /// True if csr is an *ireg* window (mireg*, sireg*, or vsireg*).
+  inline bool
+  isIregCsr(CsrNumber n)
+  { return isMiregCsr(n) or isSiregCsr(n) or isVsiregCsr(n); }
+
+
   template <typename URV>
   class CsRegs;
 
@@ -1066,7 +1099,7 @@ namespace WdRiscv
     /// internal value of MIP.
     URV effectiveMip() const
     {
-      URV mip = overrideWithSeiPinAndMvip(peekMip());
+      URV mip = overrideWithSeiPinAndMvip(peekMipRaw());
       return mip;
     }
 
@@ -1142,6 +1175,14 @@ namespace WdRiscv
       auto i = (sel << 1) >> 1;  // Clear most sig bit.
       bool custom = i != sel;    // Most sig bit set.
       return custom and i <= 0x3f;
+    }
+
+    /// Fast peek method for MIP. Returns the raw value of MIP. Contributions of MVIP and
+    /// the external sei-pin are not included. For those, use effectiveMip.
+    URV peekMipRaw() const
+    {
+      const auto& csr = regs_.at(size_t(CsrNumber::MIP));
+      return csr.read();
     }
 
   protected:
@@ -1642,13 +1683,6 @@ namespace WdRiscv
       return overrideWithSeiPin(overrideWithMvip(ip));
     }
 
-    /// Fast peek method for MIP.
-    URV peekMip() const
-    {
-      const auto& csr = regs_.at(size_t(CsrNumber::MIP));
-      return csr.read();
-    }
-
     /// Fast peek method for MVIP.
     URV peekMvip() const
     {
@@ -1732,9 +1766,15 @@ namespace WdRiscv
       const auto& mideleg = regs_.at(size_t(CsrNumber::MIDELEG));
       const auto& hideleg = regs_.at(size_t(CsrNumber::HIDELEG));
       const auto& hvien = regs_.at(size_t(CsrNumber::HVIEN));
-      URV value = ((mie.read() & mideleg.read()) | (shadowSie_ & mvien.read() & ~mideleg.read())) & hideleg.read();
-      // HVIEN affects interrupt ids 13 to 63 (see section 6.3.2 of interrupt spec).
-      value |= csr.read() & ~hideleg.read() & hvien.read() & ((~URV(0)) << 13);
+
+      // Bits 13 to 63 from SIE.
+      URV hidVal = hideleg.read();
+      URV sieVal = (mie.read() & mideleg.read()) | (shadowSie_ & mvien.read() & ~mideleg.read());
+      // Where hideleg is 1 we want sie, else either 0 or vsip
+      URV topBits = (sieVal & hidVal) | (csr.read() & hvien.read() & ~hidVal);
+      topBits = (topBits >> 13) << 13;  // Clear bits 0 to 12
+
+      URV value = ((csr.read() << 1) & URV(0xfff) & hidVal) | topBits;
       return value;
     }
 

@@ -121,6 +121,7 @@ getStringComponents(const std::string& str, char delim1, char delim2, std::strin
 }
 
 static constexpr int PacketSize = 0x4000;
+static constexpr unsigned GdbThreadId = 1;
 
 // Receive a packet from gdb. Request a retransmit from gdb if packet
 // checksum is incorrect. Returns true if a packet was received, false
@@ -533,11 +534,15 @@ notifyGdbAfterStop(WdRiscv::Hart<URV>& hart, int fd)
 
 template <typename URV>
 void
-handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
+handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd, bool notifyStop)
 {
   // The trap handler is expected to set the PC to point to the instruction
   // after the one with the exception if necessary/possible.
-  unsigned signalNum = notifyGdbAfterStop(hart, fd);
+  //
+  // After resume (ebreak, interrupt), the client is already waiting for a
+  // stop-reply. On the initial connect the client queries halt reason with
+  // '?'; do not push an unsolicited T packet.
+  unsigned signalNum = notifyStop ? notifyGdbAfterStop(hart, fd) : SIGTRAP;
 
   bool gotQuit = false;
 
@@ -630,13 +635,22 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
                   reply << "E01";
                 else
                   {
-                    // Accept thread 0 and -1 (all threads); we only have one thread.
+                    // We have one thread. Also accept the special "any" and "all" ids.
                     std::string_view tidStr = std::string_view(packet).substr(2);
                     unsigned threadId = 0;
                     bool ok = (tidStr == "-1")
-                              or (hexToInt(packet.substr(2), threadId) and threadId == 0);
+                              or (hexToInt(packet.substr(2), threadId)
+                                  and (threadId == 0 or threadId == GdbThreadId));
                     reply << (ok ? "OK" : "E01");
                   }
+              }
+              break;
+
+            case 'T':  // T<thread> — report whether the thread is alive
+              {
+                unsigned threadId = 0;
+                bool ok = hexToInt(packet.substr(1), threadId) and threadId == GdbThreadId;
+                reply << (ok ? "OK" : "E01");
               }
               break;
 
@@ -650,6 +664,8 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
                     URV addr = 0, len = 0;
                     if (not hexToInt(addrStr, addr) or not hexToInt(lenStr, len))
                       reply << "E02";
+                    else if (len > PacketSize / 2)
+                      reply << "E01";
                     else
                       {
                         bool fault = false;
@@ -887,7 +903,7 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
 
             case 'q':
               if (packet == "qC")
-                reply << "QC0";
+                reply << "QC" << (boost::format("%x") % GdbThreadId);
               else if (packet == "qAttached")
                 reply << "0";
               else if (packet == "qOffsets")
@@ -895,7 +911,7 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
               else if (packet == "qSymbol::")
                 reply << "OK";
               else if (packet == "qfThreadInfo")
-                reply << "m0";
+                reply << "m" << (boost::format("%x") % GdbThreadId);
               else if (packet == "qsThreadInfo")
                 reply << "l";
               else if (packet == "qTStatus")
@@ -920,8 +936,8 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
               else if (packet.starts_with("vCont"))
                 {
                   // Per GDB RSP: leftmost action with a matching thread-id wins.
-                  // We have a single thread (id 0). Scan in order and take the
-                  // first action that applies (explicit ":0" or bare default).
+                  // We have a single thread. Scan in order and take the first
+                  // action that applies explicitly or as a default.
                   std::vector<std::string> tokens;
                   boost::split(tokens, packet, boost::is_any_of(";"));
                   std::string selectedAction;
@@ -933,9 +949,17 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
                       boost::split(parts, token, boost::is_any_of(":"));
                       if (parts.empty())
                         continue;
-                      // No thread specifier = default (covers all); ":0" = our thread.
-                      bool appliesToUs
-                          = (parts.size() == 1) or (parts.size() >= 2 and parts[1] == "0");
+                      // No thread specifier is the default action. Thread ids
+                      // 0 and -1 mean any and all threads respectively.
+                      bool appliesToUs = parts.size() == 1;
+                      if (parts.size() >= 2)
+                        {
+                          unsigned threadId = 0;
+                          appliesToUs = parts[1] == "-1"
+                                        or (hexToInt(parts[1], threadId)
+                                            and (threadId == 0
+                                                 or threadId == GdbThreadId));
+                        }
                       if (appliesToUs)
                         {
                           selectedAction = parts.front();
@@ -988,5 +1012,5 @@ handleExceptionForGdb(WdRiscv::Hart<URV>& hart, int fd)
 }
 
 
-template void handleExceptionForGdb<uint32_t>(WdRiscv::Hart<uint32_t>&, int);
-template void handleExceptionForGdb<uint64_t>(WdRiscv::Hart<uint64_t>&, int);
+template void handleExceptionForGdb<uint32_t>(WdRiscv::Hart<uint32_t>&, int, bool);
+template void handleExceptionForGdb<uint64_t>(WdRiscv::Hart<uint64_t>&, int, bool);

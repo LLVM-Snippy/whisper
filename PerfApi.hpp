@@ -904,9 +904,35 @@ namespace TT_PERF         // Tenstorrent Whisper Performance Model API
     WdRiscv::ExceptionCause translateLoadAddr(unsigned hart, uint64_t va, uint64_t& pa,
                                               std::vector<Walk>& walks);
 
-    /// Similar to preceding translateInstrAddr, provide page table walk information.
+    /// Similar to preceding translateStoreAddr, provide page table walk information.
     WdRiscv::ExceptionCause translateStoreAddr(unsigned hart, uint64_t va, uint64_t& pa,
                                                std::vector<Walk>& walks);
+
+    /// Variants of the preceding translate methods that walk as the instruction with the
+    /// given tag would have: speculative CSR writes older than tag are forwarded for the
+    /// walk, and the tag's execute-time privilege/virtual mode is used instead of the hart's.
+    /// Use these when redoing the walk of an instruction that has executed but not retired:
+    /// execute() undoes every speculative CSR write before returning, so a plain translate*
+    /// afterwards runs against architectural state and a load that singleStep accepted under
+    /// a speculative MSTATUS/SSTATUS (SUM, MXR) faults here instead.
+    ///
+    /// The mode comes from the in-flight packet, so if there is no packet for tag or it has
+    /// not executed these fall back to the hart's mode and behave like the untagged
+    /// overloads. Callers wanting the tagged behavior must call after execute().
+    ///
+    /// walks is cleared first, so it is empty rather than stale when the translation is a
+    /// no-op (machine mode, or no supervisor mode). Like the untagged overloads, these leave
+    /// the hart's Hart::get{Fetch,Data}PageTableWalks() holding this walk.
+    WdRiscv::ExceptionCause translateInstrAddrForTag(unsigned hart, uint64_t tag, uint64_t iva,
+                                                     uint64_t& ipa, std::vector<Walk>& walks);
+
+    /// See translateInstrAddrForTag.
+    WdRiscv::ExceptionCause translateLoadAddrForTag(unsigned hart, uint64_t tag, uint64_t va,
+                                                    uint64_t& pa, std::vector<Walk>& walks);
+
+    /// See translateInstrAddrForTag.
+    WdRiscv::ExceptionCause translateStoreAddrForTag(unsigned hart, uint64_t tag, uint64_t va,
+                                                     uint64_t& pa, std::vector<Walk>& walks);
 
     /// Called by performance model to request that whisper updates its own memory with
     /// the data of a store instruction. Return true on success and false on error. It is
@@ -1088,6 +1114,118 @@ namespace TT_PERF         // Tenstorrent Whisper Performance Model API
     static void restoreHartValues(HartType& hart, const InstrPac& packet,
                                   const std::array<OpVal, 9>& prevVal);
 
+    /// One CSR clobbered by pushSpecCsrContext, with what to put back. ok is false when the CSR
+    /// could not be read, and so was never poked; popSpecCsrContext then leaves it alone.
+    struct CsrFwdSave { unsigned csrNum; URV prev; bool ok; };
+
+    /// Poke onto the hart the predicted new values of the in-flight speculative CSR writes
+    /// older than tag, so a setHartValues, singleStep or walk done next sees the CSR state this
+    /// point in the speculative stream would. Poked in hartSpecCsrs_ order, which is tag order,
+    /// so the youngest write to a CSR wins. Skips non-forwardable CSRs (see isNonForwardableCsr)
+    /// and packet's own CSR operands, which belong to set/restoreHartValues. Overlay before
+    /// setHartValues: pokeCsr ignores VTYPE/VL/VSTART while VS is Off.
+    ///
+    /// An S-level CSR peeks/pokes its VS counterpart per the hart's virtual mode, so the hart
+    /// must be in the mode the forwarded values were produced under. See VirtModeGuard.
+    ///
+    /// Returns what was overwritten; hand it to popSpecCsrContext (or SpecCsrContext) to undo.
+    std::vector<CsrFwdSave> pushSpecCsrContext(HartType& hart, unsigned hartIx, uint64_t tag,
+                                               const InstrPac* packet);
+
+    /// Undo pushSpecCsrContext, leaving only architectural CSR state on the hart. Reverse
+    /// order, so where several writes to one CSR were forwarded the oldest value lands.
+    static void popSpecCsrContext(HartType& hart, const std::vector<CsrFwdSave>& saves);
+
+    /// Scoped pushSpecCsrContext: pops at end of scope, so no path out of the block -- early
+    /// return or throw included -- can strand the poked values. pop() undoes it sooner; it is
+    /// idempotent and disarms the destructor.
+    class SpecCsrContext
+    {
+    public:
+
+      SpecCsrContext(HartType& hart, std::vector<CsrFwdSave>&& saves)
+        : hart_(&hart), saves_(std::move(saves))
+      { }
+
+      SpecCsrContext(const SpecCsrContext&) = delete;
+      SpecCsrContext& operator=(const SpecCsrContext&) = delete;
+
+      ~SpecCsrContext()
+      { pop(); }
+
+      void pop()
+      {
+        if (hart_)
+          {
+            popSpecCsrContext(*hart_, saves_);
+            hart_ = nullptr;
+          }
+      }
+
+    private:
+
+      HartType* hart_ = nullptr;
+      std::vector<CsrFwdSave> saves_;
+    };
+
+    /// Scoped enable of VirtMem walk tracing. A null VirtMem is a no-op that never touches the
+    /// trace flag -- restoring a stand-in prior value would clobber tracing the caller had on.
+    class WalkTraceGuard
+    {
+    public:
+
+      explicit WalkTraceGuard(WdRiscv::VirtMem* virtMem)
+        : virtMem_(virtMem), prev_(virtMem? virtMem->enableTrace(true) : false)
+      { }
+
+      WalkTraceGuard(const WalkTraceGuard&) = delete;
+      WalkTraceGuard& operator=(const WalkTraceGuard&) = delete;
+
+      ~WalkTraceGuard()
+      { if (virtMem_) virtMem_->enableTrace(prev_); }
+
+    private:
+
+      WdRiscv::VirtMem* virtMem_ = nullptr;
+      bool prev_ = false;
+    };
+
+    /// Scoped swap of the hart's virtual (V) mode. A null hart is a no-op, so a caller can say
+    /// "only if it differs" without branching around the guard.
+    class VirtModeGuard
+    {
+    public:
+
+      VirtModeGuard(HartType* hart, bool virtMode)
+        : hart_(hart), prev_(hart? hart->virtMode() : false)
+      { if (hart_) hart_->setVirtualMode(virtMode); }
+
+      VirtModeGuard(const VirtModeGuard&) = delete;
+      VirtModeGuard& operator=(const VirtModeGuard&) = delete;
+
+      ~VirtModeGuard()
+      { if (hart_) hart_->setVirtualMode(prev_); }
+
+    private:
+
+      HartType* hart_ = nullptr;
+      bool prev_ = false;
+    };
+
+    /// The access a translateAddr call is checking. One value per access, so read and write
+    /// cannot both be requested and the reported name is never ambiguous.
+    enum class TransAccess { Fetch, Load, Store };
+
+    /// Name of the given access, for error reporting.
+    static const char* transAccessName(TransAccess access);
+
+    /// Shared body of the translate* entry points. walks, when non-null, is cleared and then
+    /// receives the walk; it distinguishes the walk-reporting overloads. tag scopes the
+    /// speculative CSR context and the privilege/virtual mode (see translateInstrAddrForTag);
+    /// pass noSpecContext for plain architectural state.
+    WdRiscv::ExceptionCause translateAddr(unsigned hartIx, uint64_t tag, uint64_t va, uint64_t& pa,
+                                          TransAccess access, std::vector<Walk>* walks);
+
     /// Helper to execute. Restore IMSIC top interrupt if csrn is one of M/S/VS TOPEI.
     static void restoreImsicTopei(HartType& hart, WdRiscv::CsrNumber csrn, unsigned id, unsigned guest);
 
@@ -1158,11 +1296,12 @@ namespace TT_PERF         // Tenstorrent Whisper Performance Model API
     /// execution and to restore reservations on flush.
     std::vector<std::vector<SpecLrEntry>> hartSpecLrs_;
 
-    /// Per-hart list of in-flight speculative CSR writes' predicted new values,
-    /// ordered by tag. Walked before every speculative singleStep to forward
-    /// younger consumers (including implicit consumers like mret/sret/trap entry)
-    /// to the predicted post-write value; restored after singleStep. Pruned on
-    /// retire of the CSR write and on flush. Mirror of hartSpecLrs_.
+    /// Per-hart list of in-flight speculative CSR writes' predicted new values, kept sorted by
+    /// tag -- entries are added at execute, which is out of order, so insertion is at the upper
+    /// bound; pushSpecCsrContext needs the order to make the youngest write to a CSR win.
+    /// Walked before every speculative singleStep to forward younger consumers (implicit ones
+    /// like mret/sret/trap entry included) to the predicted post-write value; restored after.
+    /// Pruned on retire of the CSR write and on flush. Mirror of hartSpecLrs_.
     std::vector<std::vector<SpecCsrEntry>> hartSpecCsrs_;
 
     /// Cached raw Hart pointers.
@@ -1193,6 +1332,9 @@ namespace TT_PERF         // Tenstorrent Whisper Performance Model API
     static constexpr uint64_t haltPc = ~uint64_t(1);  // value assigned to InstPac->nextIva_ when program termination is encountered
 
     const uint64_t initHartLastRetired = -1;  // default value for the hartLastRetired_ map
+
+    /// tag value meaning "no speculative context": translate against architectural state.
+    static constexpr uint64_t noSpecContext = ~uint64_t(0);
   };
 
   // Type aliases for RV32 and RV64

@@ -825,6 +825,14 @@ The default size is 4 (implying a PMP G of 0).
 Defines the maximum number of guest external interrupt count (GEILEN).
 Default is zero.
 
+### nop_ireg_on_oob_iselect
+When true, accessing an *ireg* CSR (`mireg`/`sireg`/`vsireg`, including
+windows 2-6) while the corresponding *iselect* (`miselect`/`siselect`/`vsiselect`)
+holds an unimplemented or out-of-bounds index is a no-op: reads yield zero and
+writes are ignored. Default is false, which raises an illegal (or virtual)
+instruction exception as recommended by the Smcsrind/AIA specs (the spec
+otherwise leaves this case unspecified).
+
 ### coherent_icache
 When true (default is false), mark the instruction cache as coherent in which case the
 fence.i instruction will stop clearing it. This is relevant for MCM and has no effect when
@@ -921,6 +929,12 @@ The vector configuration is an object with the following fields:
   load instructions; otherwise, it does not.
 
 * vmvr_ignore_vill: when true, vmvr instructions ignore the vtype.vill bit.
+
+* log_masked_load: when true print to the log file (non-csv) the addresses of the
+  masked off elements of vector load instructions.
+
+* log_masked_store: when true print to the log file (non-csv) the addresses of the
+  masked off elements of vector store instructions.
 
 * tt_clear_tval_vl_egs: when true, we clear the \*tval register if a vector cryptography
   instruction would fail the "vl is an integer multiple of EGS" constraint.
@@ -1244,10 +1258,13 @@ The hart registers are exposed as class attributes and implement step/run functi
 
 # Limitations
 
+Changing XLEN at run time by writing to the MISA register is not supported. Having SXLEN
+different from XLEN is not supported. Same for UXLEN.
+
 The "round to nearest break tie to max magnitude" rounding mode is not
-implemented unless you compile with the softfloat library:
+supported if Whisper is compiled withou the softfloat library:
 ```
-   make SOFT_FLOAT=1
+   make SOFT_FLOAT=0
 ```
 
 <a name="Supported" />
@@ -1257,7 +1274,7 @@ implemented unless you compile with the softfloat library:
 A, B, C, D, E, F, H, I, M, N, S, U, V, Zba, Zbb, Zbc, Zbs, Zfh, Zfhmin, Zlsseg, Zknd,
 Zkne, Zknh, Zbkb, Zbkc, Zbkx, Zksed, Zksh, Zkr, Svinval, Svnapot, Zicbom, Zicboz, Zicbop,
 Zawrs, Zmmul, Zvfh, Zvfhmin, Zvbb, Zvbc, Zvkg, Zvkned, Zvknha, Zvknhb, Zvksed, Zvksh,
-Zvkb, Zicond, Zca, Zcb, Zcf, Zcd, Zfa, Zfbfmin, Zvfbfmin, Zvfbfwma, Zvqdot, Sstc, Svpbmt,
+Zvkb, Zicond, Zca, Zcb, Zcf, Zcd, Zfa, Zfbfmin, Zvfbfmin, Zvfbfwma, Zvqdotq, Sstc, Svpbmt,
 Svadu, Svade, Smaia, Ssaia, Zacas, Zimop, Zcmop, Smrnmi, Zicsr, Zicntr, Zihpm, Zifencei,
 Zihintpause, Smmpm, Ssnpm, Smnpm, Sscofpmf, Smstateen, Ssqosid, Sdtrig, Zicfilp, Zicfiss,
 Zic64b, Ziccamoa, Ziccif, Zicclsm, Ziccrse, Za64rs, Zaamo, Zalrsc, Zihintntl, Zvzip,
@@ -1265,8 +1282,12 @@ Zvabd, Smdbltrp, Ssdbltrp, Zibi, Zabha, Zalasr, Svvptc, Zilsd, Zclsd, Zvfbfa, Zv
 Smcsps, Sscsps, Smip, Ssip, Smijt, Ssijt, Smehv, Ssehv, Smnip, Ssnip,
 Smidctrl, Ssidctrl, Smcdeleg, Smcsrind, Sscsrind, Smcntrpmf, Smepmp, Zvqwdota8i,
 Zvqwbdota8i, Zvqwdota16i, Zvqwbdota16i, Zvfbdota32f, Zvfwdota16bf, Zvfqwdota8f,
-Zvfqwbdota8f, Zvfwbdota16bf
+Zvfqwbdota8f, Zvfwbdota16bf, Svrsw60t59b
 
+An extension is active if it is in the ISA string (--isa command line option or value of
+the "isa" tag in the configuraion file) and if it is not inhibited by a run-time control.
+For example, the D extension is active if it is in the ISA string, the D bit is set in the
+MISA CSR, and the FS field is non-zero in the MSTATUS CSR.
 
 <a name="RISCOF"/>
 
