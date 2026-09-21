@@ -326,12 +326,8 @@ Server<URV>::peekCommand(const WhisperMessage& req, WhisperMessage& reply, Hart<
 	    reply.address = mask;
 	    reply.time = pokeMask;
             reply.instrTag = readMask;
-#if 0
             if (csrn == CsrNumber::MIP)
-              value = hart.csRegs().effectiveMip();
-            else if (csrn == CsrNumber::SIP)
-              value = hart.csRegs().effectiveSip();
-#endif
+              value = hart.csRegs().peekMipRaw();  // This does not include MVIP and external sei-pin.
 	    reply.value = value;
 	    return true;
 	  }

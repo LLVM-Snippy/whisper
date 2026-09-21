@@ -827,9 +827,11 @@ namespace TT_IOMMU
         )
           status = Status::Success;
         else if (
-          cause == 1 or cause == 5 or cause == 7 or  // Access faults
-          cause == 261 or cause == 263 or            // MSI PTE faults
-          cause == 265 or cause == 267               // PDT entry faults
+          cause == 1 or cause == 5 or cause == 7 or        // Access faults
+          cause == 261 or cause == 263 or                  // MSI PTE faults
+          cause == 265 or cause == 267 or                  // PDT entry faults
+          cause == 268 or cause == 269 or cause == 270 or  // Data corruption
+          cause == 274                                     // Stage1/2 data corruption
         )
           status = Status::CompleterAbort;
         else

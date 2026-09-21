@@ -673,13 +673,9 @@ Interactive<URV>::peekCommand(Hart<URV>& hart, const std::string& line,
       auto csrn = csr->getNumber();
       if (hart.peekCsr(csrn, val, virtMode))
         {
-          out << (boost::format(hexForm) % val);
-#if 0
           if (csrn == CsrNumber::MIP)
-            out << " " << (boost::format(hexForm) % hart.csRegs().effectiveMip());
-          else if (csrn == CsrNumber::SIP)
-            out << " " << (boost::format(hexForm) % hart.csRegs().effectiveSip());
-#endif
+            val = hart.csRegs().peekMipRaw();  // This does not include MVIP and external sei-pin.
+          out << (boost::format(hexForm) % val);
           out << '\n';
 	  return true;
 	}

@@ -1355,17 +1355,13 @@ Mcm<URV>::retire(Hart<URV>& hart, uint64_t time, uint64_t tag,
     ok = retireStore(hart, *instr) and ok;
 
   // AMO sanity check: Must have both read and write ops.
-  // Amocas must have read, and must have write if successful.
+  // Failed amocas is exempt.
   if (di.isAmo())
     {
       bool read = instrHasRead(*instr), write = instrHasWrite(*instr);
       bool fail = not read or not write;
-      if (di.isAmocas())
-        {
-          fail = not read;
-          if (hart.lastAmocasSuccessful())
-            fail = not write;
-        }
+      if (di.isAmocas() and not hart.lastAmocasSuccessful())
+        fail = false;
 
       if (fail)
         {

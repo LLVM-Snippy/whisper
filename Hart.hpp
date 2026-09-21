@@ -1499,6 +1499,14 @@ namespace WdRiscv
     void enableTrapOobVstart(bool flag)
     { trapOobVstart_ = flag; }
 
+    /// Print to the log file masked off vector load elements if flag is true.
+    void logMaskedVecLoad(bool flag)
+    { logMaskedVecLoad_ = flag; }
+
+    /// Print to the log file masked off vector store elements if flag is true.
+    void logMaskedVecStore(bool flag)
+    { logMaskedVecStore_ = flag; }
+
     /// Enable/disable the c (compressed) extension.
     void enableRvc(bool flag)
     { enableExtension(RvExtension::C, flag); csRegs_.enableRvc(flag); }
@@ -2294,11 +2302,6 @@ namespace WdRiscv
     void enableAiaExtension(bool flag)
     { isa_.enable(RvExtension::Smaia, flag); enableExtension(RvExtension::Smaia, flag); csRegs_.enableAia(flag); }
 
-    /// For privileged spec v1.12, we clear mstatus.MPRV if xRET
-    /// causes us to enter a privilege mode not Machine.
-    void enableClearMprvOnRet(bool flag)
-    { clearMprvOnRet_ = flag; }
-
     /// Make hfence.gvma ignore guest physical addresses (over-invalidate) when flag is
     /// true.
     void hfenceGvmaIgnoresGpa(bool flag)
@@ -2308,6 +2311,14 @@ namespace WdRiscv
     /// Otherwise, set MTVAL to the opcode of the illegal instruction.
     void enableClearMtvalOnIllInst(bool flag)
     { clearMtvalOnIllInst_ = flag; }
+
+    /// When flag is true, access to an *ireg* CSR (mireg/sireg/vsireg, including
+    /// windows 2-6) while the corresponding *iselect* contains an unimplemented or
+    /// out-of-bounds index is a no-op: reads yield zero and writes are ignored.
+    /// When false (default), such accesses raise an illegal (or virtual) instruction
+    /// exception as recommended by the spec.
+    void enableNopIregOnOobIselect(bool flag)
+    { nopIregOnOobIselect_ = flag; }
 
     /// Clear MTVAL on breakpoint exception if flag is true.
     /// Otherwise, set MTVAL to the virtual address of the instruction.
@@ -2747,7 +2758,7 @@ namespace WdRiscv
 
       using IC = InterruptCause;
       imsic_->attachMInterrupt([this] (bool flag) {
-          URV mipVal = csRegs_.overrideWithMvip(csRegs_.peekMip());
+          URV mipVal = csRegs_.overrideWithMvip(csRegs_.peekMipRaw());
           URV prev = mipVal;
 
           if (flag)
@@ -3916,6 +3927,10 @@ namespace WdRiscv
     /// extension) instructions.
     bool checkRoundingModeHp(const DecodedInst* di);
 
+    /// Similar to checkRoundingModeHp but laxer: legal when either zfh
+    /// or zfhmin extension is enabled.
+    bool checkRoundingModeHpmin(const DecodedInst* di);
+
     /// Similar to checkRoundingModeSp but for for double-precision (D
     /// extension) instructions.
     bool checkRoundingModeDp(const DecodedInst* di);
@@ -4247,10 +4262,11 @@ namespace WdRiscv
     void printDecodedInstTrace(const DecodedInst& di, uint64_t tag, std::string& tmp,
                                FILE* out);
 
-    /// Variant of the preceding method for cases where the trace is
-    /// printed before decode. If the instruction is not available
-    /// then a zero (illegal) value is required.
-    void printInstTrace(uint32_t instruction, uint64_t tag, std::string& tmp,
+    /// Variant of the preceding method for cases where the trace is printed before
+    /// decode. If the instruction is not available then a zero (illegal) value is
+    /// required. Ppc is the physical pc and should be set to the virtual pc if no
+    /// translation of if translation fails.
+    void printInstTrace(uint32_t instruction, uint64_t tag, uint64_t ppc, std::string& tmp,
 			FILE* out);
 
     /// Start a synchronous exceptions.
@@ -6425,10 +6441,22 @@ namespace WdRiscv
     void execVabdu_vv(const DecodedInst*);
 
     template<typename ELEM_TYPE>
+    void vabd_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
+                 unsigned start, unsigned elems, bool masked);
+    void execVabd_vx(const DecodedInst*);
+    void execVabdu_vx(const DecodedInst*);
+
+    template<typename ELEM_TYPE>
     void vwabda_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
                    unsigned start, unsigned elems, bool masked);
     void execVwabda_vv(const DecodedInst*);
     void execVwabdau_vv(const DecodedInst*);
+
+    template<typename ELEM_TYPE>
+    void vwabda_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
+                   unsigned start, unsigned elems, bool masked);
+    void execVwabda_vx(const DecodedInst*);
+    void execVwabdau_vx(const DecodedInst*);
 
     void execSinval_vma(const DecodedInst*);
     void execSfence_w_inval(const DecodedInst*);
@@ -6840,7 +6868,6 @@ namespace WdRiscv
     URV effectiveVsie_ = 0;         // Effective v supervisor interrupt enable.
     HvictlFields hvictl_;           // Cached value of hvictl CSR
 
-    bool clearMprvOnRet_ = true;
     bool cancelLrOnTrap_ = false;   // Cancel reservation on traps when true.
     bool cancelLrOnDebug_ = false;  // Cancel reservation on enter/exit debug mode.
 
@@ -6863,6 +6890,7 @@ namespace WdRiscv
     bool inDebugParkLoop_ = false;    // True if BREAKP exception goes to DPL.
 
     bool clearMtvalOnIllInst_ = false;
+    bool nopIregOnOobIselect_ = false;  // Trap on unimplemented *iselect (spec recommended).
     bool clearMtvalOnEbreak_ = false;
     bool clearMtvalOnEgs_ = false;
     bool lastEbreak_ = false;
@@ -6915,6 +6943,9 @@ namespace WdRiscv
     bool misalHasPriority_ = true;
     bool trapNonZeroVstart_ = true;  // Trap if vstart > 0 in arith vec instructions
     bool trapOobVstart_ = false;     // Trap if vstart out of bounds: vstart >= VLMAX
+    bool logMaskedVecLoad_ = false;
+    bool logMaskedVecStore_ = false;
+
     bool bigEnd_ = false;            // True if big endian
     bool stimecmpActive_ = false;    // True if STIMECMP CSR is implemented.
     bool vstimecmpActive_ = false;   // True if VSTIMECMP CSR is implemented.

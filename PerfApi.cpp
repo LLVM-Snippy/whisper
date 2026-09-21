@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <cinttypes>
 #include <iomanip>
 #include "PerfApi.hpp"
@@ -375,6 +376,55 @@ PerfApi<URV>::decode(unsigned hartIx, uint64_t time, uint64_t tag)
 
 
 template <typename URV>
+std::vector<typename PerfApi<URV>::CsrFwdSave>
+PerfApi<URV>::pushSpecCsrContext(HartType& hart, unsigned hartIx, uint64_t tag,
+                                 const InstrPac* packet)
+{
+  std::vector<CsrFwdSave> saves;
+
+  const auto& specCsrs = hartSpecCsrs_.at(hartIx);
+  if (specCsrs.empty())
+    return saves;
+
+  auto isPacketOperand = [packet](unsigned csrNum) {
+    if (not packet)
+      return false;
+    for (unsigned i = 0; i < packet->operandCount_; ++i)
+      {
+        const auto& op = packet->operands_[i];  // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
+        if (op.type == OperandType::CsReg and op.number == csrNum)
+          return true;
+      }
+    return false;
+  };
+
+  saves.reserve(specCsrs.size());
+  for (const auto& entry : specCsrs)
+    {
+      if (entry.tag >= tag) continue;                  // forward only OLDER in-flight writes
+      if (isPacketOperand(entry.csrNum)) continue;     // owned by set/restoreHartValues
+      if (isNonForwardableCsr(entry.csrNum)) continue; // FP/vector-format CSRs: see isNonForwardableCsr
+      URV prev{};
+      bool ok = hart.peekCsr(CSRN(entry.csrNum), prev);
+      saves.push_back({entry.csrNum, prev, ok});
+      if (ok) hart.pokeCsr(CSRN(entry.csrNum), URV(entry.newVal));
+    }
+
+  return saves;
+}
+
+
+template <typename URV>
+void
+PerfApi<URV>::popSpecCsrContext(HartType& hart, const std::vector<CsrFwdSave>& saves)
+{
+  for (auto it = saves.rbegin(); it != saves.rend(); ++it)
+    if (it->ok)
+      hart.pokeCsr(CSRN(it->csrNum), it->prev);
+}
+
+
+template <typename URV>
 bool
 PerfApi<URV>::execute(unsigned hartIx, uint64_t time, uint64_t tag)
 {
@@ -438,29 +488,9 @@ PerfApi<URV>::execute(unsigned hartIx, uint64_t time, uint64_t tag)
     const auto& op = packet.operands_[i];
     if (op.type == OperandType::CsReg and isIndirectCsrWindow(op.number)) { hasIndirectWindow = true; break; }
   }
-  struct CtxFwd { unsigned csrNum; URV prev; bool ok; };
-  std::vector<CtxFwd> ctxFwds;
-  if (hasIndirectWindow) {
-    auto isOperandCsr = [&](unsigned csrNum) {
-      for (unsigned i = 0; i < packet.operandCount_; ++i) {
-        const auto& op = packet.operands_[i];
-        if (op.type == OperandType::CsReg and op.number == csrNum) return true;
-      }
-      return false;
-    };
-    // hartSpecCsrs_ is in ascending tag order, so poking in order leaves the youngest write per CSR.
-    const auto& specCsrs = hartSpecCsrs_[hartIx];
-    ctxFwds.reserve(specCsrs.size());
-    for (const auto& e : specCsrs) {
-      if (e.tag >= packet.tag_) continue;           // forward only older in-flight writes
-      if (isOperandCsr(e.csrNum)) continue;          // operands are handled by the save/set path
-      if (isNonForwardableCsr(e.csrNum)) continue;   // FP/vector-format CSRs
-      URV prev{};
-      bool ok = hart.peekCsr(CSRN(e.csrNum), prev);
-      ctxFwds.push_back({e.csrNum, prev, ok});
-      if (ok) hart.pokeCsr(CSRN(e.csrNum), URV(e.newVal));
-    }
-  }
+  SpecCsrContext ctxFwds(hart, hasIndirectWindow
+                                 ? pushSpecCsrContext(hart, hartIx, packet.tag_, &packet)
+                                 : std::vector<CsrFwdSave>{});
 
   // Collect register operand values. Some values come from in-flight instructions
   // (register renaming).
@@ -471,10 +501,7 @@ PerfApi<URV>::execute(unsigned hartIx, uint64_t time, uint64_t tag)
   if (not execute(hartIx, packet))
     assert(0 && "Error: Assertion failed -- failed to execute instruction");
 
-  // Undo the context forwarding. Reverse order so the oldest pre-poke value lands when several
-  // writes to one CSR were forwarded.
-  for (auto it = ctxFwds.rbegin(); it != ctxFwds.rend(); ++it)
-    if (it->ok) hart.pokeCsr(CSRN(it->csrNum), it->prev);
+  ctxFwds.pop();
 
   // We should not fail to read an operand value unless there is an exception.
   if (not peekOk)
@@ -530,9 +557,12 @@ PerfApi<URV>::execute(unsigned hartIx, InstrPac& packet)
   if (not hart.peekCsr(CSRN::MSTATUS, prevMstatus))
     assert(0 && "Error: Assertion failed");
 
-  // Save hart register values corresponding to packet operands in prevVal.
+  // Architectural operand values; must precede the spec-CSR overlay.
   std::array<OpVal, 9> prevVal;
   bool saveOk = saveHartValues(hart, packet, prevVal);
+
+  // Before setHartValues: pokeCsr ignores VTYPE/VL/VSTART while VS is Off.
+  SpecCsrContext csrFwdSaves(hart, pushSpecCsrContext(hart, hartIx, packet.tag_, &packet));
 
   // Install packet operand values (some obtained from previous in-flight instructions)
   // into the hart registers.
@@ -582,41 +612,6 @@ PerfApi<URV>::execute(unsigned hartIx, InstrPac& packet)
   // Execute
   uint64_t execPreLrAddr = 0; unsigned execPreLrSize = 0;
   bool execPreHadLr = hart.getLr(execPreLrAddr, execPreLrSize);
-
-  // Producer-consumer CSR forwarding: before singleStep, walk older in-flight
-  // speculative CSR writes (in ascending tag order, so the youngest wins per CSR)
-  // and poke their predicted new values onto the hart. Save the pre-poke value so
-  // we can restore it after singleStep. Without this, younger instructions whose
-  // architectural behavior depends on a CSR (e.g. mret reading MEPC) see the stale
-  // pre-write value at execute and trip checkExecVsRetire when the producer
-  // retires and reveals the architectural post-write value.
-  //
-  // Skip CSRs that are explicit operands of the current instruction — setHartValues
-  // / restoreHartValues already manage those via the operand-rename path, and
-  // forwarding-poke/restore here would race with restoreHartValues.
-  struct CsrFwdSave { unsigned csrNum; URV prev; bool ok; };
-  std::vector<CsrFwdSave> csrFwdSaves;
-  {
-    const auto& specCsrs = hartSpecCsrs_[hartIx];
-    csrFwdSaves.reserve(specCsrs.size());
-    auto isCurrentOperand = [&](unsigned csrNum) {
-      for (unsigned i = 0; i < packet.operandCount_; ++i) {
-        const auto& op = packet.operands_[i];  // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
-        if (op.type == OperandType::CsReg and op.number == csrNum) return true;
-      }
-      return false;
-    };
-    for (const auto& entry : specCsrs)
-      {
-        if (entry.tag >= packet.tag_) continue;  // only forward from OLDER spec writes
-        if (isCurrentOperand(entry.csrNum)) continue;
-        if (isNonForwardableCsr(entry.csrNum)) continue;  // FP/vector-format CSRs: see isNonForwardableCsr
-        URV prev{};
-        bool ok = hart.peekCsr(CSRN(entry.csrNum), prev);
-        csrFwdSaves.push_back({entry.csrNum, prev, ok});
-        if (ok) hart.pokeCsr(CSRN(entry.csrNum), URV(entry.newVal));
-      }
-  }
 
   skipIoLoad_ = true;   // Load from IO space takes effect at retire.
   hart.singleStep();
@@ -767,12 +762,8 @@ PerfApi<URV>::execute(unsigned hartIx, InstrPac& packet)
   if (di.isCsr())
     restoreImsicTopei(hart, CSRN(di.ithOperand(2)), imsicId, imsicGuest);
 
-  // Undo the producer-consumer CSR forwarding done before singleStep so the hart
-  // reflects only architectural (retired) CSR state. Iterate in reverse so that
-  // when multiple writes to the same CSR were forwarded, the oldest pre-poke
-  // value ends up on the hart.
-  for (auto it = csrFwdSaves.rbegin(); it != csrFwdSaves.rend(); ++it)
-    if (it->ok) hart.pokeCsr(CSRN(it->csrNum), it->prev);
+  // Back to architectural CSR state for the rest of the recovery below.
+  csrFwdSaves.pop();
 
   // If this instruction is a CSR *write* that captured a predicted outcome, push
   // it onto hartSpecCsrs_ so younger speculative consumers see the forwarded
@@ -783,7 +774,14 @@ PerfApi<URV>::execute(unsigned hartIx, InstrPac& packet)
   if (di.isCsr() and not trap and packet.csrExecuted_
       and di.effectiveIthOperandMode(2) == WdRiscv::OperandMode::ReadWrite
       and not isNonForwardableCsr(packet.csrNum_))
-    hartSpecCsrs_[hartIx].push_back({packet.tag_, packet.csrNum_, packet.csrExecNewVal_});
+    {
+      // Insert in tag order: pushSpecCsrContext pokes in list order and needs the youngest
+      // write to a CSR last, and execute is out of order, so appending is not enough.
+      auto& specCsrs = hartSpecCsrs_[hartIx];
+      auto pos = std::upper_bound(specCsrs.begin(), specCsrs.end(), packet.tag_,
+                                  [](uint64_t t, const SpecCsrEntry& e) { return t < e.tag; });
+      specCsrs.insert(pos, {packet.tag_, packet.csrNum_, packet.csrExecNewVal_});
+    }
 
   hart.setTargetProgramFinished(false);
   hart.pokePc(prevPc);
@@ -1150,17 +1148,80 @@ PerfApi<URV>::checkExecVsRetire(const HartType& hart, const InstrPac& packet)
 
 
 template <typename URV>
+const char*
+PerfApi<URV>::transAccessName(TransAccess access)
+{
+  switch (access)
+    {
+    case TransAccess::Fetch: return "translate-instr-addr";
+    case TransAccess::Load:  return "translate-load-addr";
+    case TransAccess::Store: return "translate-store-addr";
+    }
+  return "translate-addr";
+}
+
+
+template <typename URV>
+WdRiscv::ExceptionCause
+PerfApi<URV>::translateAddr(unsigned hartIx, uint64_t tag, uint64_t va, uint64_t& pa,
+                            TransAccess access, std::vector<Walk>* walks)
+{
+  bool x = access == TransAccess::Fetch;
+  bool r = access == TransAccess::Load;
+  bool w = access == TransAccess::Store;
+
+  auto* hart = checkHartRaw(transAccessName(access), hartIx);
+  hart->clearPageTableWalk();
+  pa = va;
+
+  // Clear up front, not just where a walk is produced: on the no-op paths below a caller
+  // reusing one vector would otherwise read the previous instruction's walk back as this one's.
+  if (walks)
+    walks->clear();
+
+  // Privilege/virtual mode of the requesting instruction, which is what its walk must use.
+  // See translateInstrAddrForTag for the fallback when the packet has no recorded mode.
+  auto pm = hart->privilegeMode();
+  bool vm = hart->virtMode();
+  if (tag != noSpecContext)
+    if (const auto* packet = hartPacketMaps_.at(hartIx).find(tag); packet and packet->executed())
+      {
+        pm = packet->privlegeMode();
+        vm = packet->virtMode();
+      }
+
+  if (pm == WdRiscv::PrivilegeMode::Machine or not hart->isRvs())
+    return WdRiscv::ExceptionCause::NONE;
+
+  // An S-level CSR aliases to its VS counterpart per the hart's virtual mode, as does the
+  // translation config that poking SATP/VSATP/HGATP re-derives, so the forwarding below has to
+  // run in the instruction's mode rather than the hart's. A no-op when they already agree.
+  VirtModeGuard vmGuard(vm == hart->virtMode()? nullptr : hart, vm);
+
+  // MSTATUS/SSTATUS carry SUM and MXR, so a walk without the forwarded writes can fault on a
+  // page the instruction legitimately accessed. After vmGuard: CSRs are put back before it is.
+  SpecCsrContext csrFwdSaves(*hart, tag == noSpecContext
+                                      ? std::vector<CsrFwdSave>{}
+                                      : pushSpecCsrContext(*hart, hartIx, tag, nullptr));
+
+  WdRiscv::ExceptionCause cause = WdRiscv::ExceptionCause::NONE;
+  {
+    WalkTraceGuard traceGuard(walks? &hart->virtMem() : nullptr);
+    cause = hart->transAddrNoUpdate(va, pm, vm, r, w, x, pa);
+  }
+
+  if (walks)
+    *walks = x? hart->getFetchPageTableWalks() : hart->getDataPageTableWalks();
+
+  return cause;
+}
+
+
+template <typename URV>
 WdRiscv::ExceptionCause
 PerfApi<URV>::translateInstrAddr(unsigned hartIx, uint64_t va, uint64_t& pa)
 {
-  auto* hart = checkHartRaw("Translate-instr-addr", hartIx);
-  hart->clearPageTableWalk();
-  bool r = false, w = false, x = true;
-  auto pm = hart->privilegeMode();
-  pa = va;
-  if (pm == WdRiscv::PrivilegeMode::Machine or not hart->isRvs())
-    return WdRiscv::ExceptionCause::NONE;
-  return  hart->transAddrNoUpdate(va, pm, hart->virtMode(), r, w, x, pa);
+  return translateAddr(hartIx, noSpecContext, va, pa, TransAccess::Fetch, nullptr);
 }
 
 
@@ -1168,14 +1229,7 @@ template <typename URV>
 WdRiscv::ExceptionCause
 PerfApi<URV>::translateLoadAddr(unsigned hartIx, uint64_t va, uint64_t& pa)
 {
-  auto* hart = checkHartRaw("translate-load-addr", hartIx);
-  hart->clearPageTableWalk();
-  bool r = true, w = false, x = false;
-  auto pm = hart->privilegeMode();
-  pa = va;
-  if (pm == WdRiscv::PrivilegeMode::Machine or not hart->isRvs())
-    return WdRiscv::ExceptionCause::NONE;
-  return  hart->transAddrNoUpdate(va, pm, hart->virtMode(), r, w, x, pa);
+  return translateAddr(hartIx, noSpecContext, va, pa, TransAccess::Load, nullptr);
 }
 
 
@@ -1183,14 +1237,7 @@ template <typename URV>
 WdRiscv::ExceptionCause
 PerfApi<URV>::translateStoreAddr(unsigned hartIx, uint64_t va, uint64_t& pa)
 {
-  auto* hart = checkHartRaw("translate-store-addr", hartIx);
-  hart->clearPageTableWalk();
-  bool r = false, w = true, x = false;
-  auto pm = hart->privilegeMode();
-  pa = va;
-  if (pm == WdRiscv::PrivilegeMode::Machine or not hart->isRvs())
-    return WdRiscv::ExceptionCause::NONE;
-  return  hart->transAddrNoUpdate(va, pm, hart->virtMode(), r, w, x, pa);
+  return translateAddr(hartIx, noSpecContext, va, pa, TransAccess::Store, nullptr);
 }
 
 
@@ -1199,19 +1246,7 @@ WdRiscv::ExceptionCause
 PerfApi<URV>::translateInstrAddr(unsigned hartIx, uint64_t va, uint64_t& pa,
                             std::vector<Walk>& walks)
 {
-  auto* hart = checkHartRaw("translate-instr-addr", hartIx);
-
-  pa = va;
-  auto pm = hart->privilegeMode();
-  if (pm == WdRiscv::PrivilegeMode::Machine or not hart->isRvs())
-    return WdRiscv::ExceptionCause::NONE;
-
-  auto& virtmem = hart->virtMem();  // reference, not a copy: VirtMem owns the walk vectors/pool
-  auto prevTrace = virtmem.enableTrace(true);
-  auto ec = translateInstrAddr(hartIx, va, pa);
-  virtmem.enableTrace(prevTrace);
-  walks = hart->getFetchPageTableWalks();
-  return ec;
+  return translateAddr(hartIx, noSpecContext, va, pa, TransAccess::Fetch, &walks);
 }
 
 
@@ -1220,19 +1255,7 @@ WdRiscv::ExceptionCause
 PerfApi<URV>::translateLoadAddr(unsigned hartIx, uint64_t va, uint64_t& pa,
                            std::vector<Walk>& walks)
 {
-  auto* hart = checkHartRaw("translate-load-addr", hartIx);
-
-  pa = va;
-  auto pm = hart->privilegeMode();
-  if (pm == WdRiscv::PrivilegeMode::Machine or not hart->isRvs())
-    return WdRiscv::ExceptionCause::NONE;
-
-  auto& virtmem = hart->virtMem();  // reference, not a copy: VirtMem owns the walk vectors/pool
-  auto prevTrace = virtmem.enableTrace(true);
-  auto ec = translateLoadAddr(hartIx, va, pa);
-  virtmem.enableTrace(prevTrace);
-  walks = hart->getDataPageTableWalks();
-  return ec;
+  return translateAddr(hartIx, noSpecContext, va, pa, TransAccess::Load, &walks);
 }
 
 
@@ -1241,19 +1264,34 @@ WdRiscv::ExceptionCause
 PerfApi<URV>::translateStoreAddr(unsigned hartIx, uint64_t va, uint64_t& pa,
                             std::vector<Walk>& walks)
 {
-  auto* hart = checkHartRaw("translate-store-addr", hartIx);
+  return translateAddr(hartIx, noSpecContext, va, pa, TransAccess::Store, &walks);
+}
 
-  pa = va;
-  auto pm = hart->privilegeMode();
-  if (pm == WdRiscv::PrivilegeMode::Machine or not hart->isRvs())
-    return WdRiscv::ExceptionCause::NONE;
 
-  auto& virtmem = hart->virtMem();  // reference, not a copy: VirtMem owns the walk vectors/pool
-  auto prevTrace = virtmem.enableTrace(true);
-  auto ec = translateStoreAddr(hartIx, va, pa);
-  virtmem.enableTrace(prevTrace);
-  walks = hart->getDataPageTableWalks();
-  return ec;
+template <typename URV>
+WdRiscv::ExceptionCause
+PerfApi<URV>::translateInstrAddrForTag(unsigned hartIx, uint64_t tag, uint64_t va, uint64_t& pa,
+                                       std::vector<Walk>& walks)
+{
+  return translateAddr(hartIx, tag, va, pa, TransAccess::Fetch, &walks);
+}
+
+
+template <typename URV>
+WdRiscv::ExceptionCause
+PerfApi<URV>::translateLoadAddrForTag(unsigned hartIx, uint64_t tag, uint64_t va, uint64_t& pa,
+                                      std::vector<Walk>& walks)
+{
+  return translateAddr(hartIx, tag, va, pa, TransAccess::Load, &walks);
+}
+
+
+template <typename URV>
+WdRiscv::ExceptionCause
+PerfApi<URV>::translateStoreAddrForTag(unsigned hartIx, uint64_t tag, uint64_t va, uint64_t& pa,
+                                       std::vector<Walk>& walks)
+{
+  return translateAddr(hartIx, tag, va, pa, TransAccess::Store, &walks);
 }
 
 
@@ -2519,8 +2557,11 @@ PerfApi<URV>::getVectorOperandsLmul(HartType& hart, InstrPac& packet)
   using CN = WdRiscv::CsrNumber;
   using OT = WdRiscv::OperandType;
 
-  // 1. Set vtype value if it is in-flight.
   auto hartIx = hart.sysHartIndex();
+  // pokeCsr ignores VTYPE while VS is Off.
+  SpecCsrContext csrFwd(hart, pushSpecCsrContext(hart, hartIx, packet.tag_, &packet));
+
+  // 1. Set vtype value if it is in-flight.
   auto& producers = hartRegProducers_[hartIx];
   auto vtypeGri = globalRegIx(OT::CsReg, unsigned(CN::VTYPE));
   auto producer = producers[vtypeGri];  // Producer of vtype
@@ -2667,7 +2708,9 @@ PerfApi<URV>::getVecOpsLmul(HartType& hart, InstrPac& packet)
     case InstId::vfwmaccbf16_vv:
     case InstId::vfwmaccbf16_vf:
     case InstId::vwabda_vv:
+    case InstId::vwabda_vx:
     case InstId::vwabdau_vv:
+    case InstId::vwabdau_vx:
     case InstId::vzip_vv:
       packet.operands_[0].lmul = effWideLmul;
       break;

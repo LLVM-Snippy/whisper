@@ -713,6 +713,9 @@ namespace TT_IMSIC      // TensTorrent Incoming Message Signaled Interrupt Contr
         g.clearTrace();
     }
 
+    bool traceEnabled() const
+    { return trace_; }
+
     /// Returns false if IMSIC region is marked inaccessible.
     template <typename URV>
     static constexpr bool isFileSelAccessible(unsigned select, bool virt)

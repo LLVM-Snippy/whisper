@@ -229,6 +229,16 @@ Hart<URV>::loadReserve(const DecodedInst* di, uint32_t rd, uint32_t rs1)
   if (not std::is_same<ULT, LOAD_TYPE>::value)
     value = SRV(LOAD_TYPE(uval)); // Sign extend.
 
+  // Check for load-data-trigger.
+  if (hasActiveTrigger())
+    {
+      TriggerTiming timing = TriggerTiming::Before;
+      bool isLoad = true;
+      ldStDataTriggerHit(uval, timing, isLoad);
+      if (breakpOrEnterDebugTripped())
+        return false;
+    }
+
   intRegs_.write(rd, value);
   return true;
 }

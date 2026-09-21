@@ -27,6 +27,33 @@
 using namespace WdRiscv;
 
 
+namespace
+{
+  // Absolute difference computed in a wider type so that signed
+  // subtraction of SEW-bit values (e.g. 127 - (-128)) does not
+  // overflow. The result is then truncated back to SEW bits.
+  template <typename T>
+  T
+  absDiff(T a, T b)
+  {
+    using DWT = makeDoubleWide_t<T>;
+    DWT da = a, db = b;
+    DWT d = da > db ? da - db : db - da;
+    return T(d);
+  }
+
+
+  template <typename T>
+  makeDoubleWide_t<T>
+  wideAbsDiff(T a, T b)
+  {
+    using DWT = makeDoubleWide_t<T>;
+    DWT da = a, db = b;
+    return da > db ? da - db : db - da;
+  }
+}
+
+
 template<typename URV>
 template<typename ELEM_TYPE>
 void
@@ -44,7 +71,7 @@ Hart<URV>::vabs_v(unsigned vd, unsigned vs1, unsigned groupx8,
       if (vecRegs_.isDestActive(vd, ix, destGroupx8, masked, dest))
 	{
           vecRegs_.read(vs1, ix, groupx8, e1);
-          dest = e1 < 0 ? -e1 : e1;   // FIX: Spec does not specify abs(INT_MIN)
+          dest = absDiff(e1, ELEM_TYPE(0));
 	}
       vecRegs_.write(vd, ix, destGroupx8, dest);
     }
@@ -116,7 +143,7 @@ Hart<URV>::vabd_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned groupx8,
 	{
           vecRegs_.read(vs1, ix, groupx8, e1);
           vecRegs_.read(vs2, ix, groupx8, e2);
-          dest = std::max(e1, e2) - std::min(e1, e2);
+          dest = absDiff(e1, e2);
 	}
       vecRegs_.write(vd, ix, destGroupx8, dest);
     }
@@ -155,8 +182,12 @@ Hart<URV>::execVabd_vv(const DecodedInst* di)
     case EW::Half:
       vabd_vv<int16_t>(vd, vs1, vs2, groupx8, start, elems, masked);
       break;
-    case EW::Word:    // SEW boave Half is reserved.
+    case EW::Word:
+      vabd_vv<int32_t>(vd, vs1, vs2, groupx8, start, elems, masked);
+      break;
     case EW::Word2:
+      vabd_vv<int64_t>(vd, vs1, vs2, groupx8, start, elems, masked);
+      break;
     default:
       postVecFail(di);
       return;
@@ -198,8 +229,136 @@ Hart<URV>::execVabdu_vv(const DecodedInst* di)
     case EW::Half:
       vabd_vv<uint16_t>(vd, vs1, vs2, groupx8, start, elems, masked);
       break;
-    case EW::Word:    // SEW boave Half is reserved.
+    case EW::Word:
+      vabd_vv<uint32_t>(vd, vs1, vs2, groupx8, start, elems, masked);
+      break;
     case EW::Word2:
+      vabd_vv<uint64_t>(vd, vs1, vs2, groupx8, start, elems, masked);
+      break;
+    default:
+      postVecFail(di);
+      return;
+    }
+
+  postVecSuccess(di);
+}
+
+
+template<typename URV>
+template<typename ELEM_TYPE>
+void
+Hart<URV>::vabd_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned groupx8,
+                   unsigned start, unsigned elems, bool masked)
+{
+  ELEM_TYPE e1{}, dest{};
+  unsigned destGroupx8 = std::max(VecRegs::groupMultiplierX8(GroupMultiplier::One), groupx8);
+
+  if (start >= vecRegs_.elemCount())
+    return;
+
+  for (unsigned ix = start; ix < elems; ++ix)
+    {
+      if (vecRegs_.isDestActive(vd, ix, destGroupx8, masked, dest))
+	{
+          vecRegs_.read(vs1, ix, groupx8, e1);
+          dest = absDiff(e1, e2);
+	}
+      vecRegs_.write(vd, ix, destGroupx8, dest);
+    }
+}
+
+
+template <typename URV>
+void
+Hart<URV>::execVabd_vx(const DecodedInst* di)
+{
+  if (not isRvzvabd())
+    {
+      postVecFail(di);
+      return;
+    }
+
+  if (not checkVecIntInst(di))
+    return;
+
+  bool masked = di->isMasked();
+  unsigned vd = di->op0(),  vs1 = di->op1(),  rs2 = di->op2();
+  unsigned groupx8 = vecRegs_.groupMultiplierX8();
+  unsigned start = csRegs_.peekVstart();
+  unsigned elems = vecRegs_.elemMax();
+  ElementWidth sew = vecRegs_.elemWidth();
+
+  if (not checkVecOpsVsEmul(di, groupx8, {vd, vs1}))
+    return;
+
+  // Scalar value is sign extended for XLEN < SEW. Per spec.
+  auto e2 = int64_t(SRV(intRegs_.read(rs2)));
+
+  using EW = ElementWidth;
+  switch (sew)
+    {
+    case EW::Byte:
+      vabd_vx<int8_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
+    case EW::Half:
+      vabd_vx<int16_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
+    case EW::Word:
+      vabd_vx<int32_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
+    case EW::Word2:
+      vabd_vx<int64_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
+    default:
+      postVecFail(di);
+      return;
+    }
+
+  postVecSuccess(di);
+}
+
+
+template <typename URV>
+void
+Hart<URV>::execVabdu_vx(const DecodedInst* di)
+{
+  if (not isRvzvabd())
+    {
+      postVecFail(di);
+      return;
+    }
+
+  if (not checkVecIntInst(di))
+    return;
+
+  bool masked = di->isMasked();
+  unsigned vd = di->op0(),  vs1 = di->op1(),  rs2 = di->op2();
+  unsigned groupx8 = vecRegs_.groupMultiplierX8();
+  unsigned start = csRegs_.peekVstart();
+  unsigned elems = vecRegs_.elemMax();
+  ElementWidth sew = vecRegs_.elemWidth();
+
+  if (not checkVecOpsVsEmul(di, groupx8, {vd, vs1}))
+    return;
+
+  // Scalar value is sign extended for XLEN < SEW. Per spec.
+  auto e2 = uint64_t(int64_t(SRV(intRegs_.read(rs2))));
+
+  using EW = ElementWidth;
+  switch (sew)
+    {
+    case EW::Byte:
+      vabd_vx<uint8_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
+    case EW::Half:
+      vabd_vx<uint16_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
+    case EW::Word:
+      vabd_vx<uint32_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
+    case EW::Word2:
+      vabd_vx<uint64_t>(vd, vs1, e2, groupx8, start, elems, masked);
+      break;
     default:
       postVecFail(di);
       return;
@@ -232,7 +391,7 @@ Hart<URV>::vwabda_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned groupx8,
 	{
 	  vecRegs_.read(vs1, ix, groupx8, e1);
 	  vecRegs_.read(vs2, ix, groupx8, e2);
-          dest += std::max(e1, e2) - std::min(e1, e2);
+          dest += wideAbsDiff(e1, e2);
 	}
       vecRegs_.write(vd, ix, destGroupx8, dest);
     }
@@ -318,6 +477,128 @@ Hart<URV>::execVwabdau_vv(const DecodedInst* di)
     {
     case EW::Byte:  vwabda_vv<uint8_t>(vd, vs1, vs2, gx8, start, elems, masked); break;
     case EW::Half:  vwabda_vv<uint16_t>(vd, vs1, vs2, gx8, start, elems, masked); break;
+    case EW::Word:  // SEW above Half reserved.
+    case EW::Word2:
+    default:        postVecFail(di); return;
+    }
+
+  postVecSuccess(di);
+}
+
+
+template<typename URV>
+template<typename ELEM_TYPE>
+void
+Hart<URV>::vwabda_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned groupx8,
+                     unsigned start, unsigned elems, bool masked)
+{
+  using DWT = makeDoubleWide_t<ELEM_TYPE>; // Double wide type
+
+  ELEM_TYPE e1{};
+  DWT dest{};
+
+  unsigned destGroupx8 = std::max(VecRegs::groupMultiplierX8(GroupMultiplier::One), groupx8*2);
+
+  if (start >= vecRegs_.elemCount())
+    return;
+
+  for (unsigned ix = start; ix < elems; ++ix)
+    {
+      if (vecRegs_.isDestActive(vd, ix, destGroupx8, masked, dest))
+	{
+	  vecRegs_.read(vs1, ix, groupx8, e1);
+          dest += wideAbsDiff(e1, e2);
+	}
+      vecRegs_.write(vd, ix, destGroupx8, dest);
+    }
+}
+
+
+template <typename URV>
+void
+Hart<URV>::execVwabda_vx(const DecodedInst* di)
+{
+  if (not isRvzvabd())
+    {
+      postVecFail(di);
+      return;
+    }
+
+  if (not checkVecIntInst(di))
+    return;
+
+  unsigned gx8 = vecRegs_.groupMultiplierX8();
+  ElementWidth dsew{}, sew = vecRegs_.elemWidth();
+
+  if (not vecRegs_.isDoubleWideLegal(sew, dsew, gx8))
+    {
+      postVecFail(di);
+      return;
+    }
+
+  bool masked = di->isMasked();
+  unsigned vd = di->op0(),  vs1 = di->op1();
+  unsigned elems = vecRegs_.elemMax(dsew), start = csRegs_.peekVstart();
+
+  bool vdSrc = true;  // Vd is also a source operand.
+  if (not checkVecOpsVsEmul(di, gx8, {{vd, true}, {vs1, false}}, vdSrc))
+    return;
+
+  // Scalar value is sign extended for XLEN < SEW. Per spec.
+  SRV e2 = SRV(intRegs_.read(di->op2()));
+
+  using EW = ElementWidth;
+  switch (sew)
+    {
+    case EW::Byte:  vwabda_vx<int8_t>(vd, vs1, e2, gx8, start, elems, masked); break;
+    case EW::Half:  vwabda_vx<int16_t>(vd, vs1, e2, gx8, start, elems, masked); break;
+    case EW::Word:  // SEW above Half reserved.
+    case EW::Word2:
+    default:        postVecFail(di); return;
+    }
+
+  postVecSuccess(di);
+}
+
+
+template <typename URV>
+void
+Hart<URV>::execVwabdau_vx(const DecodedInst* di)
+{
+  if (not isRvzvabd())
+    {
+      postVecFail(di);
+      return;
+    }
+
+  if (not checkVecIntInst(di))
+    return;
+
+  unsigned gx8 = vecRegs_.groupMultiplierX8();
+  ElementWidth dsew{}, sew = vecRegs_.elemWidth();
+
+  if (not vecRegs_.isDoubleWideLegal(sew, dsew, gx8))
+    {
+      postVecFail(di);
+      return;
+    }
+
+  bool masked = di->isMasked();
+  unsigned vd = di->op0(),  vs1 = di->op1();
+  unsigned elems = vecRegs_.elemMax(dsew), start = csRegs_.peekVstart();
+
+  bool vdSrc = true;  // Vd is also a source operand.
+  if (not checkVecOpsVsEmul(di, gx8, {{vd, true}, {vs1, false}}, vdSrc))
+    return;
+
+  // Scalar value is sign extended for XLEN < SEW. Per spec.
+  auto e2 = uint32_t(intRegs_.read(di->op2()));
+
+  using EW = ElementWidth;
+  switch (sew)
+    {
+    case EW::Byte:  vwabda_vx<uint8_t>(vd, vs1, e2, gx8, start, elems, masked); break;
+    case EW::Half:  vwabda_vx<uint16_t>(vd, vs1, e2, gx8, start, elems, masked); break;
     case EW::Word:  // SEW above Half reserved.
     case EW::Word2:
     default:        postVecFail(di); return;
