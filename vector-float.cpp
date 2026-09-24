@@ -8567,6 +8567,10 @@ Hart<URV>::vfncvt_f_f_q(const DecodedInst* di, bool saturate)
 {
   // fp32 to ofp8
 
+  // Check vector enabled, vill, vstart, and dest/mask and source/mask overlap.
+  if (not checkVecIntInst(di))
+    return;
+
   bool masked = di->isMasked();
   unsigned vd = di->op0(),  vs1 = di->op1();
   unsigned dgx8 = vecRegs_.groupMultiplierX8();  // Destination group times 8
