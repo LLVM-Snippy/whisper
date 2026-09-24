@@ -12760,7 +12760,8 @@ Hart<URV>::execWfi(const DecodedInst* di)
   bool tw = mstatus_.bits_.TW;
   bool vtw = hstatus_.bits_.VTW;
 
-  // VU-mode with TW=0 has no bounded-time exception.
+  // VU-mode with TW=0 has no bounded-time exception. Always trap;
+  // wfi_stall_exception does not apply.
   if (virtMode_ and pm == PM::User and not tw)
     {
       virtualInst(di);
@@ -12786,6 +12787,9 @@ Hart<URV>::execWfi(const DecodedInst* di)
   // Bound expired (including wfiTimeout_ == 0). TW does not apply to M-mode.
   if (pm == PM::Machine)
     return;
+  if (not wfiStallException_)
+    return;
+
   if (tw)
     {
       // TW=1 in less than M: illegal unless WFI completed within the bound.

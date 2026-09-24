@@ -2289,6 +2289,12 @@ namespace WdRiscv
     void setWfiTimeout(uint64_t t)
     { wfiTimeout_ = t; }
 
+    /// When false (default), a WFI whose stall bound expires retires
+    /// instead of taking an illegal-instruction or virtual-instruction
+    /// exception. Does not apply to VU-mode with TW=0, which always traps.
+    void setWfiStallException(bool flag)
+    { wfiStallException_ = flag; }
+
     /// Enable user mode.
     void enableUserMode(bool flag)
     { enableExtension(RvExtension::U, flag); csRegs_.enableUserMode(flag); }
@@ -6965,6 +6971,7 @@ namespace WdRiscv
     uint64_t logStart_ = 0; // Start logging at this instruction rank.
 
     uint64_t wfiTimeout_ = 1;  // Non-zero: implementation-specified WFI time limit.
+    bool wfiStallException_ = false;  // If false, an expired WFI stall does not trap.
 
     bool misalDataOk_ = true;
     bool misalHasPriority_ = true;

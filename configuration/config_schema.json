@@ -1337,6 +1337,10 @@
             "$ref": "#/definitions/int_or_hex_string",
             "description": "Implementation-specific bounded time limit for WFI (priv spec mstatus.TW). WFI waits this many ticks for an interrupt. If the bound expires (zero means no wait), WFI traps when TW/VTW/U-mode require a timeout."
         },
+        "wfi_stall_exception": {
+            "$ref": "#/definitions/bool_or_bool_string",
+            "description": "If true, WFI takes an illegal-instruction or virtual-instruction exception when its stall bound expires (TW, VTW, or U-mode with S). If false (default), those paths retire. VU-mode with TW=0 always traps and is not affected."
+        },
         "imsic": {
             "type": "object",
             "additionalProperties": false,
