@@ -2920,6 +2920,14 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
       hart.setWfiTimeout(timeout);
     }
 
+  tag = "wfi_stall_exception";
+  if (config_ ->contains(tag))
+    {
+      bool flag = false;
+      getJsonBoolean(tag, config_ ->at(tag), flag) or errors++;
+      hart.setWfiStallException(flag);
+    }
+
   tag = "hfence_gvma_ignores_gpa";
   if (config_ ->contains(tag))
     {
