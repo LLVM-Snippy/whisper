@@ -1285,10 +1285,7 @@ VirtMem::stage1PageTableWalk(uint64_t address, PrivilegeMode privMode, bool read
 	    assert(pteAddr == pteAddr2);
 
 	    if (not memWrite(pteAddr2, bigEndStage1_, orig.data_))
-              {
-                std::cerr << "PTE write failed even though PMP/PMA checks passed\n";
-                assert(0);
-              }
+              return traceException(accessFaultType(read, write, exec), forFetch_, walkIx);
 
             // We do this for backward compatibility. This should not be done.
             if (trace_)

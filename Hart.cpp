@@ -375,7 +375,11 @@ Hart<URV>::setupVirtMemCallbacks()
         addr = stee_.clearSecureBits(addr);
       }
 
-    if (not pmaMgr_.accessPma(addr).isRsrv())
+    auto pma = pmaMgr_.accessPma(addr);
+    pma = overridePmaWithPbmt(pma, virtMem_.lastPbmt());
+
+    bool ok = pma.isWrite() and pma.isRsrv() and not (pma.isIo() or pma.isNc());
+    if (not ok)
       return false;
 
     if (size == 4)
@@ -459,10 +463,7 @@ Hart<URV>::setupVirtMemCallbacks()
 
     // To write PTE after update of A/D bits we require PMA with write and atomicity
     // attributes.
-    bool ok = pma.isWrite() and pma.isRsrv();
-
-    // if (mcm_ and dataCache_)
-    // return dataCache_->isLineResident(addr);
+    bool ok = pma.isWrite() and pma.isRsrv() and not (pma.isIo() or pma.isNc());
 
     return ok;
   });
@@ -12763,7 +12764,8 @@ Hart<URV>::execWfi(const DecodedInst* di)
   bool tw = mstatus_.bits_.TW;
   bool vtw = hstatus_.bits_.VTW;
 
-  // VU-mode with TW=0 has no bounded-time exception.
+  // VU-mode with TW=0 has no bounded-time exception. Always trap;
+  // wfi_stall_exception does not apply.
   if (virtMode_ and pm == PM::User and not tw)
     {
       virtualInst(di);
@@ -12789,6 +12791,9 @@ Hart<URV>::execWfi(const DecodedInst* di)
   // Bound expired (including wfiTimeout_ == 0). TW does not apply to M-mode.
   if (pm == PM::Machine)
     return;
+  if (not wfiStallException_)
+    return;
+
   if (tw)
     {
       // TW=1 in less than M: illegal unless WFI completed within the bound.
