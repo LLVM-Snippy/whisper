@@ -979,6 +979,9 @@ Mcm<URV>::mergeBufferInsert(Hart<URV>& hart, uint64_t time, uint64_t tag, uint64
   auto& undrained = hartData_.at(hartIx).undrainedStores_;
   undrained.insert(tag);
 
+  if (instr->isRetired())
+    return checkWriteOpAddr(*instr, op);
+
   return true;
 }
 
@@ -1058,6 +1061,8 @@ Mcm<URV>::bypassOp(Hart<URV>& hart, uint64_t time, uint64_t tag, uint64_t pa,
       if (instr->di_.extension() == RvExtension::Zicbom)
         result = checkCmo(hart, *instr) and result;
     }
+  // else if (instr->isRetired())
+  // result = checkWriteOpAddr(*instr, op) and result;
 
   return result;
 }
@@ -1154,14 +1159,16 @@ Mcm<URV>::retireStore(Hart<URV>& hart, McmInstr& instr)
   auto& undrained = hartData_.at(hartIx).undrainedStores_;
 
   if (instr.isStore_ and not instr.complete_)
-    {
-      undrained.insert(instr.tag_);
-      return ok;
-    }
+    undrained.insert(instr.tag_);
+  else
+    undrained.erase(instr.tag_);    // Store complete or an unsuccessful amocas: mark as drained.
 
-  // If store is complete or if we have an unsuccessful amocas, mark as drained.
-  if (not instr.isStore_ or instr.complete_)
-    undrained.erase(instr.tag_);
+  for (const auto& opIx : instr.memOps_)
+    {
+      auto& op = sysMemOps_.at(opIx);
+      if (op.bypass_ or not op.isRead_)
+        ok = checkWriteOpAddr(instr, op) and ok;
+    }
 
   return ok;
 }
@@ -2002,6 +2009,97 @@ Mcm<URV>::checkVecStoreData(Hart<URV>& hart, const McmInstr& store) const
           return false;
         }
     }
+
+  return true;
+}
+
+
+template <typename URV>
+bool
+Mcm<URV>::checkWriteOpAddr(const McmInstr& instr, const MemoryOp& op) const
+{
+  uint64_t badAddr = 0;
+  if (not checkWriteOpAddr(instr, op, badAddr))
+    {
+      std::cerr << "Error: hart-id=" << unsigned(instr.hartIx_) << " tag=" << instr.tag_
+                << " write/bypass operation address 0x" << std::hex << badAddr
+                << " is not within its store instr addr range\n" << std::dec;
+      return false;
+    }
+
+  return true;
+}
+
+
+template <typename URV>
+bool
+Mcm<URV>::checkWriteOpAddr(const McmInstr& instr, const MemoryOp& op, uint64_t& badAddr) const
+{
+  if (not instr.isStore_)
+    return true;  // Should not happen
+
+  assert(not op.isRead_);
+  assert(instr.isRetired());
+
+  // Check that all write operation addresses faill within the addresses of the
+  // corresponding store instruction.
+
+  bool isScalar = not instr.di_.isVector();
+
+  if (isScalar)
+    {
+      if (instr.physAddr_ == instr.physAddr2_)   // Not a page crosser
+        {
+          for (unsigned i = 0; i < op.size_; ++i)
+            {
+              uint64_t addr = op.pa_ + i;
+              if ((addr < instr.physAddr_) or (addr >= instr.physAddr_ + instr.size_))
+                {
+                  badAddr = addr;
+                  return false;
+                }
+            }
+          return true;
+        }
+
+      auto size1 = offsetToNextPage(instr.physAddr_);
+      auto size2 = instr.size_ - size1;
+
+      for (unsigned i = 0; i < op.size_; ++i)
+        {
+          uint64_t addr = op.pa_ + i;
+          if ( ((addr >= instr.physAddr_)  and (addr < instr.physAddr_  + size1)) or
+               ((addr >= instr.physAddr2_) and (addr < instr.physAddr2_ + size2)) )
+            continue;
+          badAddr = addr;
+          return false;
+        }
+      return true;
+    }
+
+  // Vector store.
+  auto& vecRefMap = hartData_.at(instr.hartIx_).vecRefMap_;
+  auto iter = vecRefMap.find(instr.tag_);
+  assert(iter != vecRefMap.end());
+  auto& vecRefs = iter->second;
+
+  // Remaining addresses of op that are not covered by instruction address range.
+  uint64_t remain = (uint64_t(1) << (op.size_ + 1)) - 1; // 1 bit for each op address
+
+  for (auto& ref : vecRefs.refs_)
+    for (unsigned i = 0; i < op.size_; ++i)
+      {
+        uint64_t addr = op.pa_ + i;
+        if (addr >= ref.pa_ and addr < ref.pa_ + ref.size_)
+          remain &= ~(uint64_t(1) << i);  // Addr covered, clear corresonding bit
+      }
+
+  for (unsigned i = 0; i < op.size_; ++i)
+    if (remain & (1 << i))
+      {
+        badAddr = op.pa_ + i;
+        return false;
+      }
 
   return true;
 }
