@@ -1168,7 +1168,7 @@ namespace WdRiscv
     virtMem_.setExecReadable(mstatus_.bits_.MXR);
     virtMem_.setStage1ExecReadable(mstatus_.bits_.MXR);
     virtMem_.setSum(mstatus_.bits_.SUM);
-    if (virtMode_)
+    if (isRvh())
       updateCachedVsstatus();
 
     pmaskManager_.setExecReadable(mstatus_.bits_.MXR);
@@ -1189,7 +1189,7 @@ namespace WdRiscv
     virtMem_.setStage1ExecReadable(mstatus_.bits_.MXR);
     virtMem_.setSum(mstatus_.bits_.SUM);
 
-    if (virtMode_)
+    if (isRvh())
       updateCachedVsstatus();
 
     pmaskManager_.setExecReadable(mstatus_.bits_.MXR);
@@ -1985,7 +1985,7 @@ Hart<URV>::reportLrScStat(FILE* file) const
 
 template <typename URV>
 void
-Hart<URV>::initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2)
+Hart<URV>::initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2)
 {
   initiateException(cause, currPc_, addr1, addr2, di);
 }
@@ -1993,7 +1993,7 @@ Hart<URV>::initiateLoadException(const DecodedInst* di, ExceptionCause cause, UR
 
 template <typename URV>
 void
-Hart<URV>::initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2)
+Hart<URV>::initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2)
 {
   initiateException(cause, currPc_, addr1, addr2, di);
 }
@@ -3343,7 +3343,7 @@ Hart<URV>::initiateInterrupt(InterruptCause cause, PrivilegeMode nextMode,
 // Start a synchronous exception.
 template <typename URV>
 void
-Hart<URV>::initiateException(ExceptionCause cause, URV pc, URV info, URV info2, const DecodedInst* di)
+Hart<URV>::initiateException(ExceptionCause cause, URV pc, URV info, uint64_t info2, const DecodedInst* di)
 {
   // Check if stuck because of lack of exception handler. Disable if
   // you do want the stuck behavior.
@@ -3487,7 +3487,7 @@ isGpaTrap(unsigned causeCode)
 template <typename URV>
 uint32_t
 Hart<URV>::createTrapInst(const DecodedInst* di, bool interrupt, unsigned causeCode,
-                          URV info, URV info2) const
+                          URV info, uint64_t info2) const
 {
   using EC = ExceptionCause;
 
@@ -3587,7 +3587,7 @@ void
 Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
                         URV cause,
                         PrivilegeMode nextMode, bool nextVirt,
-                        URV pcToSave, URV info, URV info2)
+                        URV pcToSave, URV info, uint64_t info2)
 {
   if (cancelLrOnTrap_)
     cancelLr(CancelLrCause::TRAP);
@@ -3734,7 +3734,10 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
   using EC = ExceptionCause;
   injectException_ = EC::NONE;
 
-  bool gva = isRvh() and not interrupt and (hyperLs_ or isGvaTrap(gvaVirtMode, cause));
+  bool fetchCause = (cause == unsigned(EC::INST_ADDR_MISAL) or cause == unsigned(EC::INST_ACC_FAULT) or
+                     cause == unsigned(EC::INST_PAGE_FAULT));
+  bool gva = isRvh() and not interrupt and
+             (hyperLs_ or isGvaTrap(fetchCause ? origVirtMode : gvaVirtMode, cause));
   if (origVirtMode  and  cause == unsigned(EC::HARDWARE_ERROR)  and not  interrupt)
     gva = true;
   else if (lastEbreak_)
@@ -4855,7 +4858,7 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
   else if (csr == CN::VSSTATUS)
     updateCachedVsstatus();
 
-  if (csRegs_.peekMstatus() != mstatus_.value())
+  if (csRegs_.peekMstatus() != mstatus_.value() or csr == CN::MSTATUSH)
     {
       updateCachedMstatus();
       if (isRvsmdbltrp() and mstatus_.bits_.MDT)

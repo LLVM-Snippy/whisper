@@ -2282,6 +2282,10 @@ namespace WdRiscv
     /// Set the max number of guest external interrupts.
     bool configGuestInterruptCount(unsigned n);
 
+    /// Return the guest interrupt count (GEILEN).
+    unsigned guestInterruptCount() const
+    { return csRegs_.guestInterruptCount(); }
+
     /// Set the implementation-specific, bounded time limit for WFI (priv spec
     /// mstatus.TW / hstatus.VTW / U-mode). WFI waits up to this many ticks for
     /// an interrupt. If the bound expires (zero means no wait), WFI traps when
@@ -4003,11 +4007,11 @@ namespace WdRiscv
 
     /// Helper to load methods: Initiate an exception with the given
     /// cause and data address.
-    void initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2 = 0);
+    void initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2 = 0);
 
     /// Helper to store methods: Initiate an exception with the given
     /// cause and data address.
-    void initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2 = 0);
+    void initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2 = 0);
 
     /// Helper to lb, lh, lw and ld. Load type should be int_8, int16_t
     /// etc... for signed byte, halfword etc... and uint8_t, uint16_t
@@ -4292,7 +4296,7 @@ namespace WdRiscv
 			FILE* out);
 
     /// Start a synchronous exceptions.
-    void initiateException(ExceptionCause cause, URV pc, URV info, URV info2 = 0,
+    void initiateException(ExceptionCause cause, URV pc, URV info, uint64_t info2 = 0,
 			   const DecodedInst* di = nullptr);
 
     /// Start an asynchronous exception (interrupt).
@@ -4344,7 +4348,7 @@ namespace WdRiscv
     /// information about an exception.
     void initiateTrap(const DecodedInst* di, bool interrupt, URV cause,
                       PrivilegeMode nextMode, bool nextVirt,
-                      URV pcToSave, URV info, URV info2 = 0);
+                      URV pcToSave, URV info, uint64_t info2 = 0);
 
     /// Helper to initiateTrap supporting ACLIC table vectored mode. Called when
     /// MTVEC/STVEC mode is table-vectored (3) to determine the interrupt handler PC.
@@ -4373,7 +4377,7 @@ namespace WdRiscv
 
     /// Create trap instruction information for mtinst/htinst.
     uint32_t createTrapInst(const DecodedInst* di, bool interrupt, unsigned cause,
-                            URV info, URV info2) const;
+                            URV info, uint64_t info2) const;
 
     /// Illegal instruction. Initiate an illegal instruction trap.
     /// This is used for one of the following:
