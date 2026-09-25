@@ -6971,7 +6971,7 @@ namespace WdRiscv
     uint64_t logStart_ = 0; // Start logging at this instruction rank.
 
     uint64_t wfiTimeout_ = 1;  // Non-zero: implementation-specified WFI time limit.
-    bool wfiStallException_ = false;  // If false, an expired WFI stall does not trap.
+    bool wfiStallException_ = true;  // If false, an expired WFI stall does not trap.
 
     bool misalDataOk_ = true;
     bool misalHasPriority_ = true;
