@@ -1712,6 +1712,23 @@ CsRegs<URV>::updateSmcdeleg()
 
 template <typename URV>
 void
+CsRegs<URV>::updateGuestInterruptMasks()
+{
+  // Only bits GEILEN:1 of HGEIE and HGEIP are implemented.
+  unsigned xlen = sizeof(URV) * 8;
+  unsigned geilen = geilen_ < xlen ? geilen_ : xlen - 1;
+  URV mask = geilen ? (~URV(0) >> (xlen - 1 - geilen)) & ~URV(1) : 0;
+  for (auto csrn : { CsrNumber::HGEIE, CsrNumber::HGEIP } )
+    if (auto csr = findCsr(csrn))
+      {
+        csr->setWriteMask(mask);
+        csr->setPokeMask(mask);
+      }
+}
+
+
+template <typename URV>
+void
 CsRegs<URV>::enableHypervisorMode(bool flag)
 {
   hyperEnabled_ = flag;
@@ -1730,8 +1747,10 @@ CsRegs<URV>::enableHypervisorMode(bool flag)
     enableCsr(csrn, flag);
 
   if (rv32_)
-    for (auto csrn : { CN::HENVCFGH, CN::HTIMEDELTAH } )
+    for (auto csrn : { CN::HENVCFGH, CN::HTIMEDELTAH, CN::HEDELEGH } )
       enableCsr(csrn, flag);
+
+  updateGuestInterruptMasks();
 
   if (superEnabled_)
     for (auto csrn : { CN::VSSTATUS, CN::VSIE, CN::VSTVEC, CN::VSSCRATCH,
@@ -2493,6 +2512,14 @@ CsRegs<URV>::enableZicfilp(bool flag)
   sfields.value_ = sstatus.getPokeMask();
   sfields.bits_.SPELP = flag;
   sstatus.setPokeMask(sfields.value_ & mstatus.getPokeMask());
+
+  auto& vsstatus = regs_.at(size_t(CN::VSSTATUS));
+  MstatusFields<URV> vsf{vsstatus.getWriteMask()};
+  vsf.bits_.SPELP = flag;
+  vsstatus.setWriteMask(vsf.value_);
+  vsf.value_ = vsstatus.getPokeMask();
+  vsf.bits_.SPELP = flag;
+  vsstatus.setPokeMask(vsf.value_);
 
   MseccfgFields<URV> mf{regs_.at(size_t(CN::MSECCFG)).getReadMask()};
   mf.bits_.MLPE = flag;
@@ -4146,7 +4173,7 @@ CsRegs<URV>::write(CsrNumber csrn, PrivilegeMode mode, URV value)
   csr->write(value);
   recordWrite(csrn);
 
-  if (num == CN::MENVCFG)
+  if (num == CN::MENVCFG or num == CN::MENVCFGH)
     {
       bool stce = menvcfgStce();
       enableHenvcfgStce(stce); // MENVCFG.STCE off makes HENVCFG.STCE read-only zero.
@@ -6143,7 +6170,7 @@ CsRegs<URV>::poke(CsrNumber num, URV value, bool virtMode)
 
   csr->poke(value);
 
-  if (num == CN::MENVCFG)
+  if (num == CN::MENVCFG or num == CN::MENVCFGH)
     {
       bool stce = menvcfgStce();
       enableHenvcfgStce(stce); // MENVCFG.STCE off makes HENVCFG.STCE read-only zero.
@@ -8417,7 +8444,7 @@ CsRegs<URV>::virtTimerExpired() const
   if (not time  or  not htimedelta  or  not vstimecmp)
     return false;
 
-  return time->read() + htimedelta->read() >= vstimecmp->read();
+  return read64(CN::TIME) + read64(CN::HTIMEDELTA) >= read64(CN::VSTIMECMP);
 }
 
 
