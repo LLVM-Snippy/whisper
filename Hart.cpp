@@ -375,7 +375,11 @@ Hart<URV>::setupVirtMemCallbacks()
         addr = stee_.clearSecureBits(addr);
       }
 
-    if (not pmaMgr_.accessPma(addr).isRsrv())
+    auto pma = pmaMgr_.accessPma(addr);
+    pma = overridePmaWithPbmt(pma, virtMem_.lastPbmt());
+
+    bool ok = pma.isWrite() and pma.isRsrv() and not (pma.isIo() or pma.isNc());
+    if (not ok)
       return false;
 
     if (size == 4)
@@ -459,10 +463,7 @@ Hart<URV>::setupVirtMemCallbacks()
 
     // To write PTE after update of A/D bits we require PMA with write and atomicity
     // attributes.
-    bool ok = pma.isWrite() and pma.isRsrv();
-
-    // if (mcm_ and dataCache_)
-    // return dataCache_->isLineResident(addr);
+    bool ok = pma.isWrite() and pma.isRsrv() and not (pma.isIo() or pma.isNc());
 
     return ok;
   });

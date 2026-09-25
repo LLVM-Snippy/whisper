@@ -47,7 +47,7 @@ namespace WdRiscv
        Mapped = Exec | Read | Write,
        AmoArith = AmoSwap | AmoOther | AmoLogical,
        Amo = AmoArith,
-       Default = Read | Write | Exec | Idempotent | Amo | Rsrv | MisalOk
+       Default = Read | Write | Exec | Idempotent | Amo | Rsrv | MisalOk | Cacheable
       };
 
     /// Default constructor: No access allowed, no-mmr, no-atomic.
@@ -71,6 +71,12 @@ namespace WdRiscv
     /// Return true if cacheable region.
     bool isCacheable() const
     { return attrib_ & Cacheable; }
+
+    bool isNonCacheable() const
+    { return not isCacheable(); }
+
+    bool isNc() const
+    { return not isCacheable(); }
 
     /// Return true if readable (load instructions allowed) region.
     bool isRead() const
@@ -989,10 +995,12 @@ namespace WdRiscv
           // Process AMO attributes for for io/nc regions.
           if (io or not cacheable)
             {
+              // Treat reserve-non-eventual as rsrv to match RTL.
+              if (atype == 2 or atype == 3)
+                attrib |= Pma::Attrib::Rsrv;
+
               if (atype == 1 or atype == 3)
                 {
-                  // rsrv-non-eventual same as no-rsrv in Whisper. Don't add Attrib::Rsrv.
-
                   bool amoOk = io ? allowAmoInIo_ : allowAmoInNonCacheable_;
                   if (amoOk)
                     {
