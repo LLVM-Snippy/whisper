@@ -241,6 +241,7 @@ SparseMem::initPage(uint64_t pageNum, std::vector<uint8_t>& page)
 
           z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b7;
           z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+          z = z ^ (z >> 31);
 
           uint8_t byte = z >> (8 * (addr & 3));
           page.at(i) = byte;
