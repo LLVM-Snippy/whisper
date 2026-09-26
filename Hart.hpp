@@ -3546,16 +3546,6 @@ namespace WdRiscv
       return pm;
     }
 
-    /// Return the effective virtual mode: if MSTATUS.MPRV is set then it is the virtual
-    /// mode in MSTATUS.MPV
-    bool effectiveVirtualMode() const
-    {
-      bool virt = virtMode_;
-      if (mstatusMprv() and not nmieOverridesMprv())
-	virt = mstatusMpp() == PrivilegeMode::Machine? false : mstatus_.bits_.MPV;
-      return virt;
-    }
-
     /// Read an item that may span 2 physical pages. If pa1 is the
     /// same as pa2 then the item is in one page: do a simple read. If
     /// pa1 is different from pa2, then the item crosses a page
@@ -4164,7 +4154,7 @@ namespace WdRiscv
                                             isBreakpInterruptEnabled(), hitAddr);
       if (hit)
         {
-          triggerTripped_ = true;
+          triggerTripped_ = ldStTriggerTripped_ = true;
           ldStFaultAddr_ = addrTrigsReportEa_ ? addr : hitAddr;
         }
       return hit;
@@ -4180,7 +4170,7 @@ namespace WdRiscv
       bool hit = csRegs_.ldStDataTriggerHit(value, t, isLoad, privilegeMode(), virtMode(),
                                             isBreakpInterruptEnabled());
       if (hit)
-        triggerTripped_ = true;
+        triggerTripped_ = ldStTriggerTripped_ = true;
       return hit;
     }
 
@@ -6703,6 +6693,7 @@ namespace WdRiscv
     void resetExecInfo()
     {
       triggerTripped_ = enteredDebugMode_ = hasInterrupt_ = hasException_ = false;
+      ldStTriggerTripped_ = false;
       ebreakInstDebug_ = false;
       ldStSize_ = 0;
       lastPriv_ = privMode_;
@@ -6804,6 +6795,7 @@ namespace WdRiscv
     bool csrException_ = false;      // True if there is a CSR related exception.
     bool hasInterrupt_ = false;      // True if there is an interrupt.
     bool triggerTripped_ = false;    // True if a trigger trips.
+    bool ldStTriggerTripped_ = false; // True if a load/store trigger trips.
     bool icountTrig_ = false;        // True if icount trigger hit.
 
     bool lastBranchTaken_ = false; // Useful for performance counters
