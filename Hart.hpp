@@ -3350,6 +3350,10 @@ namespace WdRiscv
       return true;
     }
 
+    /// Set the default physical memory attributes.
+    void setDefaultPma(Pma pma)
+    { pmaMgr_.setDefaultPma(pma); }
+
     /// Temporary.
     void enableBabylonPma(bool flag)
     { bbl_ = flag; pmaMgr_.enableBabylon(flag); }
