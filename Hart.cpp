@@ -3920,7 +3920,7 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
 	}
       else if (cause != URV(ExceptionCause::BREAKP))
 	{
-	  if (csRegs_.expTriggerHit(cause, privMode_, virtMode_, isBreakpInterruptEnabled()))
+	  if (csRegs_.expTriggerHit(cause, origMode, origVirtMode, isBreakpInterruptEnabled()))
             initiateException(ExceptionCause::BREAKP, pc_, 0, 0, di);
 	}
     }
