@@ -1609,6 +1609,24 @@ HartConfig::applyMemoryConfig(System<URV>& system, Hart<URV>& hart) const
           else
             errors++;
         }
+
+      tag = "default_pma";
+      if (memMap.contains(tag))
+        {
+          Pma pma;
+          if (not getConfigPma("memmap.default_pma", memMap.at(tag), pma))
+            errors++;
+          else
+            {
+              if (pma.hasMemMappedReg())
+                {
+                  cerr << "Warning: Configuration file default_pma has mem_mapped"
+                       << " -- mem_mapped ignored\n";
+                  pma.disable(Pma::MemMapped);
+                }
+              hart.setDefaultPma(pma);
+            }
+        }
     }
 
   if (config_ -> contains("cache"))

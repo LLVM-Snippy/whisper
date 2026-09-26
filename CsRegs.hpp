@@ -2078,7 +2078,14 @@ namespace WdRiscv
     /// Set the max number of guest interrupt count. This should be
     /// done before hypervisor mode is enable.
     void setGuestInterruptCount(unsigned value)
-    { geilen_ = value; }
+    { geilen_ = value; updateGuestInterruptMasks(); }
+
+    /// Return the guest interrupt count (GEILEN).
+    unsigned guestInterruptCount() const
+    { return geilen_; }
+
+    /// Make bits GEILEN:1 of HGEIE and HGEIP writable and the others read-only zero.
+    void updateGuestInterruptMasks();
 
     /// Enable/disable user mode.
     void enableUserMode(bool flag)

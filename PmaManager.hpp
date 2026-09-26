@@ -47,7 +47,7 @@ namespace WdRiscv
        Mapped = Exec | Read | Write,
        AmoArith = AmoSwap | AmoOther | AmoLogical,
        Amo = AmoArith,
-       Default = Read | Write | Exec | Idempotent | Amo | Rsrv | MisalOk | Cacheable
+       Default = Read | Write | Exec | Idempotent | Amo | Rsrv | MisalOk
       };
 
     /// Default constructor: No access allowed, no-mmr, no-atomic.
@@ -866,6 +866,10 @@ namespace WdRiscv
     /// Enable given attributes in the default PMA.
     void enableInDefaultPma(Pma::Attrib a)
     { defaultPma_.enable(a); }
+
+    /// Set the default PMA.
+    void setDefaultPma(Pma pma)
+    { defaultPma_ = pma; }
 
     /// Define the misaligned-amo-granule in the default PMA.
     void setDefaultMisalAmoGranule(unsigned g)
