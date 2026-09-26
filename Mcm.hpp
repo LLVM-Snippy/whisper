@@ -919,6 +919,16 @@ namespace WdRiscv
       return instr.di_.extension() == RvExtension::Zicbom;
     }
 
+
+    // Return true if the given write operation addresses are in the range of the
+    // corresponding store isntruction. Return false otherwise priting an error message.
+    bool checkWriteOpAddr(const McmInstr& storeInstr, const MemoryOp& writeOp) const;
+
+    // Return true if the given write operation addresses are in the range of the
+    // corresponding store isntruction. Return false otherwise setting badAddr to
+    // one of the addresses that are out of the range.
+    bool checkWriteOpAddr(const McmInstr& storeInstr, const MemoryOp& writeOp, uint64_t& badAddr) const;
+
   private:
 
     const unsigned intRegOffset_ = 0;
