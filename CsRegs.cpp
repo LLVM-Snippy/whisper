@@ -7074,15 +7074,18 @@ CsRegs<URV>::updateVirtInterrupt(URV value, bool poke)
       URV b9 = 0x200;
       mask |= b9 & ~mvienVal;  // BIT 9 updated in MVIP if it is zero in MVIEN.
 
-      // Write aliasing bits.
-      auto prev = mvip->read();
-      if (poke)
-        mvip->poke((mvip->read() & ~mask) | (value & mask));
-      else
+      // Write aliasing bits. The write is recorded whenever the aliasing mask
+      // makes MVIP the register the instruction wrote, as is done for the
+      // reverse direction in writeMvip.
+      if (mask)
         {
-          mvip->write((mvip->read() & ~mask) | (value & mask));
-          if (mvip->read() != prev)
-            recordWrite(mvip->getNumber());
+          if (poke)
+            mvip->poke((mvip->read() & ~mask) | (value & mask));
+          else
+            {
+              mvip->write((mvip->read() & ~mask) | (value & mask));
+              recordWrite(mvip->getNumber());
+            }
         }
     }
   return true;
