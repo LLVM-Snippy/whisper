@@ -385,6 +385,11 @@ Hart<URV>::vwabda_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned groupx8,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroupx8, vs1, groupx8) or
+                                      VecRegs::groupsOverlap(vd, destGroupx8, vs2, groupx8));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroupx8, masked, dest))
@@ -501,6 +506,10 @@ Hart<URV>::vwabda_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned groupx8,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroupx8, vs1, groupx8));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {

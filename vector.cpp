@@ -328,11 +328,11 @@ Hart<URV>::checkDestSourceOverlap(unsigned dest, unsigned destWidth, unsigned de
   if (srcWidth == destWidth)
     return true;   // Source eew == dest eew
 
+  if (not VecRegs::groupsOverlap(dest, destGroupX8, src, srcGroupX8))
+    return true;  // No overlap.
+
   unsigned srcGroup = srcGroupX8 >= 8 ? srcGroupX8/8 : 1;
   unsigned destGroup = destGroupX8 >= 8 ? destGroupX8/8 : 1;
-
-  if (src >= dest + destGroup or dest >= src + srcGroup)
-    return true;  // No overlap.
 
   // Destination eew > source eew: Overlap ok if source group is >=
   // 1 and overlap is at last # of <srcGroup> registers in dest.
@@ -354,10 +354,7 @@ Hart<URV>::checkSourceOverlap(unsigned s1, unsigned eew1, unsigned group1X8,
   if (eew1 == eew2)
     return true;
 
-  unsigned g1 = group1X8 >= 8 ? group1X8/8 : 1;
-  unsigned g2 = group2X8 >= 8 ? group2X8/8 : 1;
-
-  if (s1 >= s2 + g2 or s2 >= s1 + g1)
+  if (not VecRegs::groupsOverlap(s1, group1X8, s2, group2X8))
     return true;  // No overlap.
   return false;   // Overlap and different EEWs.
 }
@@ -1185,6 +1182,11 @@ Hart<URV>::vwadd_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group) or
+                                      VecRegs::groupsOverlap(vd, destGroup, vs2, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -1286,6 +1288,10 @@ Hart<URV>::vwadd_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -1396,6 +1402,10 @@ Hart<URV>::vwsub_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -1505,6 +1515,11 @@ Hart<URV>::vwsub_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group) or
+                                      VecRegs::groupsOverlap(vd, destGroup, vs2, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -1607,6 +1622,10 @@ Hart<URV>::vwadd_wv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs2, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -1895,6 +1914,10 @@ Hart<URV>::vwsub_wv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs2, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -3031,6 +3054,10 @@ Hart<URV>::vnsr_wv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group2x));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -3099,6 +3126,10 @@ Hart<URV>::vnsr_wx(unsigned vd, unsigned vs1, URV e2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group2x));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -5285,6 +5316,11 @@ Hart<URV>::vwmulu_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group) or
+                                      VecRegs::groupsOverlap(vd, destGroup, vs2, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -5352,6 +5388,10 @@ Hart<URV>::vwmulu_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -5422,6 +5462,11 @@ Hart<URV>::vwmul_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group) or
+                                      VecRegs::groupsOverlap(vd, destGroup, vs2, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -5490,6 +5535,10 @@ Hart<URV>::vwmul_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -5562,6 +5611,11 @@ Hart<URV>::vwmulsu_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group) or
+                                      VecRegs::groupsOverlap(vd, destGroup, vs2, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -5633,6 +5687,10 @@ Hart<URV>::vwmulsu_vx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -5702,6 +5760,11 @@ Hart<URV>::vwmacc_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group) or
+                                      VecRegs::groupsOverlap(vd, destGroup, vs2, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -5775,6 +5838,10 @@ Hart<URV>::vwmaccu_vx(unsigned vd, ELEM_TYPE e1, unsigned vs2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs2, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -5889,6 +5956,10 @@ Hart<URV>::vwmacc_vx(unsigned vd, ELEM_TYPE e1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs2, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -5963,6 +6034,11 @@ Hart<URV>::vwmaccsu_vv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group) or
+                                      VecRegs::groupsOverlap(vd, destGroup, vs2, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -6039,6 +6115,10 @@ Hart<URV>::vwmaccsu_vx(unsigned vd, ELEM_TYPE e1, unsigned vs2, unsigned group,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs2, group));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -6114,6 +6194,10 @@ Hart<URV>::vwmaccus_vx(unsigned vd, ELEM_TYPE e1, unsigned vs2, unsigned group,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs2, group));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -6690,6 +6774,10 @@ Hart<URV>::vsext(unsigned vd, unsigned vs1, unsigned group, unsigned fromGroup,
   if (start >= vecRegs_.elemCount())
     return;
 
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, fromGroup));
+
   for (unsigned ix = start; ix < elems; ++ix)
     {
       if (vecRegs_.isDestActive(vd, ix, destGroup, masked, dest))
@@ -6952,6 +7040,10 @@ Hart<URV>::vzext(unsigned vd, unsigned vs1, unsigned group, unsigned fromGroup,
 
   if (start >= vecRegs_.elemCount())
     return;
+
+  // When src/dest regs overlap and have different EEW, instruction is tail/mask
+  // agnostic regardless of vtype.
+  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, fromGroup));
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
