@@ -106,7 +106,6 @@ lint-job:
   after_script:
     - find . -name "*.clang-tidy.log" -exec cat {} \;
 
-
 linux-boot-job:
   stage: test
   dependencies:

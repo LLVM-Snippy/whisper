@@ -27,7 +27,6 @@ Whisper
 [Supported Extensions](#Supported)
 
 
-
 <a name="Introduction"/>
 
 # Introduction
