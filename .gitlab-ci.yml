@@ -106,55 +106,6 @@ lint-job:
   after_script:
     - find . -name "*.clang-tidy.log" -exec cat {} \;
 
-riscof-job:
-  stage: test
-  allow_failure: true  # Riscof currently broken, does not even compile
-  dependencies:
-    - "build-job"
-  script:
-    - mkdir testing/riscof
-    - cd testing/riscof
-    # Install riscof
-    - python3 -m venv virtualenv
-    - source virtualenv/bin/activate
-    - pip3 install riscof
-    - riscof arch-test --clone
-    - riscof setup --dutname whisper --refname spike
-    - rm -rf ./whisper
-    # Update riscof's config.ini file to point to the arch_test_target folder
-    - sed -i 's/testing\/riscof\/whisper/arch_test_target/g' config.ini
-    # Configure 8 parallel jobs when running whisper and spike
-    - sed -i '/target_run=1/a jobs=8' config.ini
-    - sed -i '/pluginpath=.*spike/a jobs=8' config.ini
-    # Disable runing objdump before when running spike
-    - sed -i -E 's/(\s+)(.*ref.disass.*)/\1# \2/g' spike/riscof_spike.py
-    # Enable generating signature file, and set target file name when running spike
-    - sed -i -E "s/(execute \+= self.ref_exe \+).*/\1 ' --isa={2} +signature={0} +signature-granularity=4 {1}'.format(sig_file, elf, self.isa)/g" spike/riscof_spike.py
-    # Get the isa population code from whisper's plugin and use it in spike's plugin
-    - sed -n -Ee '/self.isa =/,/self.compile_cmd =/ { s/( {4,})/  \1/g ; p }' ../../arch_test_target/riscof_whisper.py > isa_py.txt
-    # Remove "S" and "U" from ISA for spike.
-    - sed -i -e 's/, "S", "U"//' isa_py.txt
-    - sed -i -e '/self.isa =/,/^$/ {' -e '/self.isa =/r isa_py.txt' -e 'd }' spike/riscof_spike.py
-    # Up the timeout time
-    - sed -i 's/make.execute_all(self.work_dir)/make.execute_all(self.work_dir, timeout=900)/' spike/riscof_spike.py
-    # Newer compilers require zicsr for CSR instructions. This should be fixed in the
-    # test RVTEST_ISA. Until RISCOF repo is updated we compensate.
-    - sed -i -e "s/^\( *\)testentry = \(.*\)/\1testentry = \2; tei = testentry['isa'].lower()\n\1if not 'zicsr' in tei:tei = tei + '_zicsr'/" spike/riscof_spike.py
-    - sed -i -e "/self.compile_cmd.format/s/testentry\['isa'\].lower()/tei/" spike/riscof_spike.py
-    - sed -i -e "s/^\( *\)testentry = \(.*\)/\1testentry = \2; tei = testentry['isa'].lower()\n\1if not 'zicsr' in tei:tei = tei + '_zicsr'/" ../../arch_test_target/riscof_whisper.py
-    - sed -i -e "/self.compile_cmd.format/s/testentry\['isa'\].lower()/tei/" ../../arch_test_target/riscof_whisper.py
-    # Clone and build spike
-    - git clone https://github.com/riscv-software-src/riscv-isa-sim
-    - mkdir riscv-isa-sim/build
-    - cd riscv-isa-sim/build
-    - ../configure
-    - make -s -j32
-    - cd ../..
-    # Run riscof
-    - PATH=$PATH:$PWD/riscv-isa-sim/build:$PWD/../../build-Linux riscof --verbose debug run --suite riscv-arch-test/riscv-test-suite --env riscv-arch-test/riscv-test-suite/env --no-browser &> riscof.log
-  timeout: 6 hours
-
-
 linux-boot-job:
   stage: test
   dependencies:
