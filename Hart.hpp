@@ -778,6 +778,14 @@ namespace WdRiscv
     void configTailAgnosticAllOnes(bool flag)
     { vecRegs_.configTailAgnosticAllOnes(flag); }
 
+    /// When flag=true, instructions with destination/source overlap and differing element
+    /// widths will execute with mask agnostic and tail agnostic policies regardless of
+    /// VTYPE as recommended by the spec. When flag=false, such instructions will follow
+    /// the mask/tail policy of VTYPE which is legal since a policy of preserve is
+    /// compatible with a policy of agnostic.
+    void configAgnosticOverrideForOverlap(bool flag)
+    { vecRegs_.configAgnosticOverrideForOverlap(flag); }
+
     /// Configure partial vector load segment update. If flag is false, then none of a
     /// segment fields are committed if any field encounters an exception.
     void configVecPartialSegLoad(bool flag)

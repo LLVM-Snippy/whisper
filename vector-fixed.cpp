@@ -1506,7 +1506,8 @@ Hart<URV>::vnclip_wv(unsigned vd, unsigned vs1, unsigned vs2, unsigned group,
 
   // When src/dest regs overlap and have different EEW, instruction is tail/mask
   // agnostic regardless of vtype.
-  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group2x));
+  bool force = vecRegs_.agnosticOverride() and VecRegs::groupsOverlap(vd, destGroup, vs1, group2x);
+  VecRegs::ForceAgnostic fa(vecRegs_, force);
 
   for (unsigned ix = start; ix < elems; ++ix)
     {
@@ -1602,7 +1603,8 @@ Hart<URV>::vnclip_wx(unsigned vd, unsigned vs1, ELEM_TYPE e2, unsigned group,
 
   // When src/dest regs overlap and have different EEW, instruction is tail/mask
   // agnostic regardless of vtype.
-  VecRegs::ForceAgnostic fa(vecRegs_, VecRegs::groupsOverlap(vd, destGroup, vs1, group2x));
+  bool force = vecRegs_.agnosticOverride() and VecRegs::groupsOverlap(vd, destGroup, vs1, group2x);
+  VecRegs::ForceAgnostic fa(vecRegs_, force);
 
   for (unsigned ix = start; ix < elems; ++ix)
     {

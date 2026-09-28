@@ -898,6 +898,12 @@ The vector configuration is an object with the following fields:
   instructions, default is "ones" which causes the bits of the tail elements to be set to
   ones.
 
+* agnostic_override_for_width_overlap: when true, instructions with destination source
+  overlap and differing element widths will execute with mask agnostic and tail agnostic
+  policies regardless of VTYPE as recommended by the spec. When false, such instructions
+  will follow the mask/tail agnostic policies of VTYPE which is legal since a policy of
+  preserve is compatible with a policy of agnostic. Default is true.
+
 * trap_non_zero_vstart: causes non load-store vector instruction to trap on non-zero
   vstart, default is true.
 

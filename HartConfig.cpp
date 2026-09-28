@@ -981,6 +981,16 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
 	}
     }
 
+  tag = "agnostic_override_for_overlap";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (getJsonBoolean(tag, vconf.at(tag), flag))
+        hart.configAgnosticOverrideForOverlap(flag);
+      else
+        errors++;
+    }
+
   tag = "trap_non_zero_vstart";
   if (vconf.contains(tag))
     {
