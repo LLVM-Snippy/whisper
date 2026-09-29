@@ -2062,6 +2062,15 @@ CsRegs<URV>::enableSscofpmf(bool flag)
   else
     csr->setImplemented(flag & superEnabled_);
 
+  // MHPMEVENT3H to MHPMEVENT31H exist only with Sscofpmf.
+  if (rv32_)
+    for (unsigned i = 0; i < 29; ++i)
+      {
+        auto hcsr = findCsr(advance(CsrNumber::MHPMEVENT3H, i));
+        if (hcsr)
+          hcsr->setImplemented(flag);
+      }
+
   // Add CSR fields.
   std::vector<typename Csr<URV>::Field> hpm = {{"zero", 3}};
   for (unsigned i = 3; i <= 31; ++i)
@@ -4556,8 +4565,9 @@ CsRegs<URV>::configMachineModePerfCounters(unsigned numCounters, bool cof)
            if (not configCsr(csrNum, true, resetValue, mask, pokeMask, shared))
              errors++;
 
+           // MHPMEVENT3H to MHPMEVENT31H exist only with Sscofpmf.
            csrNum = advance(CsrNumber::MHPMEVENT3H, i);
-           if (not configCsr(csrNum, true, resetValue, evMask >> 32, evPokeMask >> 32,
+           if (not configCsr(csrNum, cof, resetValue, evMask >> 32, evPokeMask >> 32,
                              shared))
              errors++;
          }
@@ -5006,7 +5016,9 @@ CsRegs<URV>::defineMachineRegs()
   // Define mhpmcounter3/mhpmcounter3h to mhpmcounter31/mhpmcounter31h
   // as write-anything/read-zero (user can change that in the config
   // file by setting the number of writeable counters). Same for
-  // mhpmevent3/mhpmevent3h to mhpmevent3h/mhpmevent31h.
+  // mhpmevent3/mhpmevent3h to mhpmevent3h/mhpmevent31h. The
+  // mhpmevent3h to mhpmevent31h CSRs exist only with Sscofpmf (see
+  // enableSscofpmf).
   for (unsigned i = 3; i <= 31; ++i)
     {
       auto ctrNum = advance(CsrNumber::MHPMCOUNTER3, i - 3);
@@ -5027,7 +5039,7 @@ CsRegs<URV>::defineMachineRegs()
 
           auto hevntNum = advance(CsrNumber::MHPMEVENT3H, i - 3);
           name = "mhpmevent" + std::to_string(i) + "h";
-          defineCsr(std::move(name), hevntNum, mand, imp, 0, rom, rom);
+          defineCsr(std::move(name), hevntNum, !mand, !imp, 0, rom, rom);
 	  markHighLowPair(hevntNum, evntNum);
         }
     }
