@@ -1495,6 +1495,16 @@ CsRegs<URV>::enableSupervisorMode(bool flag)
     for (auto csrn : { CN::SIEH, CN::SIPH, CN::MEDELEGH, CN::MIDELEGH } )
       enableCsr(csrn, flag);
 
+  // SBE (bit 4 of MSTATUSH in RV32) is read-only zero if S-mode is not supported.
+  if (rv32_ and not flag)
+    {
+      auto& msh = regs_.at(size_t(CN::MSTATUSH));
+      URV sbe = URV(1) << 4;
+      msh.write(msh.read() & ~sbe);
+      msh.setWriteMask(msh.getWriteMask() & ~sbe);
+      msh.setPokeMask(msh.getPokeMask() & ~sbe);
+    }
+
   if (hyperEnabled_)
     {
       for (auto csrn : { CN::VSSTATUS, CN::VSIE, CN::VSTVEC, CN::VSSCRATCH,
@@ -2578,6 +2588,17 @@ CsRegs<URV>::enableZicfilp(bool flag)
   MstatusFields<URV> mfields{mstatus.getWriteMask()};
   mfields.bits_.SPELP = flag;
   mstatus.setWriteMask(mfields.value_);
+
+  // MPELP is bit 9 of MSTATUSH in RV32.
+  if (rv32_)
+    {
+      auto& msh = regs_.at(size_t(CN::MSTATUSH));
+      URV mpelp = URV(1) << 9;
+      if (not flag)
+        msh.write(msh.read() & ~mpelp);
+      msh.setWriteMask(flag ? (msh.getWriteMask() | mpelp) : (msh.getWriteMask() & ~mpelp));
+      msh.setPokeMask(flag ? (msh.getPokeMask() | mpelp) : (msh.getPokeMask() & ~mpelp));
+    }
 
   // Update SPELP readable/writable in SSTATUS.
   auto& sstatus = regs_.at(size_t(CN::SSTATUS));
@@ -4881,7 +4902,9 @@ CsRegs<URV>::defineMachineRegs()
   defineCsr("mstatus", Csrn::MSTATUS, mand, imp, val, mask, pokeMask);
   if (rv32_)
     {
-      mask = 0x000007f0;
+      // SBE and MBE. Bit 8 is WPRI. GVA/MPV, MPELP, and MDT are made
+      // writable by enableHypervisorMode, enableZicfilp, and enableSmdbltrp.
+      mask = 0x00000030;
       defineCsr("mstatush", Csrn::MSTATUSH, mand, imp, 0, mask, mask);
       markHighLowPair(Csrn::MSTATUSH, Csrn::MSTATUS);
     }
