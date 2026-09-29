@@ -1551,6 +1551,7 @@ CsRegs<URV>::enableSupervisorMode(bool flag)
   updateSmcdeleg();             // To activate/deactivate SCOUNTINHIBIT.
   enableSscofpmf(cofEnabled_);  // To activate/deactivate SCOUNTOVF.
   enableSmstateen(stateenOn_);  // To activate/deactivate STATEEN CSRs.
+  enableAia(aiaEnabled_);       // To activate/deactivate AIA supervisor CSRs.
   enableSdtrig(sdtrigOn_);      // To activate/deactivate SCONTEXT.
   enableSsqosid(ssqosidOn_);    // To activate/deactivate SRMCFG.
 
@@ -2336,17 +2337,26 @@ CsRegs<URV>::enableAia(bool flag)
   // Sscsrind owns supervisor indirect CSR access independently of Smaia.
   // If Smaia is enabled, make these CSRS implemented.
   // Even if Smaia is disabled, these CSRs are implemented if Sscsrind is enabled.
-  auto sscsrindFlag = flag or sscsrindOn_;
+  // Supervisor CSRs do not exist without supervisor mode.
+  auto sscsrindFlag = (flag or sscsrindOn_) and superEnabled_;
   for (auto csrn : { SISELECT, SIREG, SIREG2, SIREG3, SIREG4, SIREG5, SIREG6 })
     {
       auto csr = findCsr(csrn);
       csr->setImplemented(sscsrindFlag);
     }
 
-  for (auto csrn : { MTOPEI, MTOPI, MVIEN, MVIP, STOPEI, STOPI })
+  for (auto csrn : { MTOPEI, MTOPI })
     {
       auto csr = findCsr(csrn);
       csr->setImplemented(flag);
+    }
+
+  // MVIEN/MVIP and the supervisor AIA CSRs do not exist without supervisor mode.
+  bool sflag = superEnabled_ and flag;
+  for (auto csrn : { MVIEN, MVIP, STOPEI, STOPI })
+    {
+      auto csr = findCsr(csrn);
+      csr->setImplemented(sflag);
     }
 
   bool hflag = hyperEnabled_ and flag;
@@ -2369,13 +2379,19 @@ CsRegs<URV>::enableAia(bool flag)
 
   if (sizeof(URV) == 4)
     {
-      for (auto csrn : { MIDELEGH, MIEH, MVIENH, MVIPH, MIPH, SIEH, SIPH, HIDELEGH })
+      for (auto csrn : { MIEH, MIPH })
 	{
 	  auto csr = findCsr(csrn);
 	  csr->setImplemented(flag);
 	}
 
-      for (auto csrn : { HVIENH, HVIPH, HVIPRIO1H, HVIPRIO2H, VSIEH, VSIPH } )
+      for (auto csrn : { MIDELEGH, MVIENH, MVIPH, SIEH, SIPH })
+	{
+	  auto csr = findCsr(csrn);
+	  csr->setImplemented(sflag);
+	}
+
+      for (auto csrn : { HIDELEGH, HVIENH, HVIPH, HVIPRIO1H, HVIPRIO2H, VSIEH, VSIPH } )
 	{
 	  auto csr = findCsr(csrn);
 	  csr->setImplemented(hflag);
