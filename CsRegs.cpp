@@ -2269,6 +2269,62 @@ CsRegs<URV>::enableSmstateen(bool flag)
 
 template <typename URV>
 void
+CsRegs<URV>::updateStateenMasks()
+{
+  using CN = CsrNumber;
+
+  // Bits of MSTATEEN0/HSTATEEN0 that control state of other extensions are writable
+  // only if the hart implements that state; otherwise they are read-only zero.
+  Mstateen0Fields managed, mbits;
+  managed.bits_.ACLIC = managed.bits_.res4 = managed.bits_.SRMCFG = managed.bits_.P1P13 = 1;
+  managed.bits_.CONTEXT = managed.bits_.IMSIC = managed.bits_.AIA = managed.bits_.CSRIND = 1;
+  managed.bits_.ENVCFG = 1;
+
+  auto implemented = [this] (CN csrn) {
+    auto csr = findCsr(csrn);
+    return csr and csr->isImplemented();
+  };
+
+  if (superEnabled_)
+    {
+      mbits.bits_.ACLIC = aclic_ or implemented(CN::SSPCS) or implemented(CN::SIJT);
+      mbits.bits_.SRMCFG = ssqosidOn_;
+      mbits.bits_.P1P13 = rv32_ and hyperEnabled_;  // HEDELEGH exists only in RV32.
+      mbits.bits_.CONTEXT = sdtrigOn_;
+      mbits.bits_.IMSIC = aiaEnabled_;
+      mbits.bits_.AIA = aiaEnabled_;
+      mbits.bits_.CSRIND = aiaEnabled_ or sscsrindOn_;
+      mbits.bits_.ENVCFG = 1;
+    }
+
+  // SRMCFG and P1P13 are reserved in HSTATEEN0.
+  Mstateen0Fields hbits(mbits.value_);
+  hbits.bits_.SRMCFG = hbits.bits_.P1P13 = 0;
+
+  auto update = [this] (CN csrn, URV mng, URV bits) {
+    auto csr = findCsr(csrn);
+    if (not csr)
+      return;
+    csr->setWriteMask((csr->getWriteMask() & ~mng) | bits);
+    csr->setPokeMask((csr->getPokeMask() & ~mng) | bits);
+    csr->pokeNoMask(csr->value() & ~(mng & ~bits));  // Clear bits now read-only-zero.
+  };
+
+  if (rv32_)
+    {
+      update(CN::MSTATEEN0H, managed.value_ >> 32, mbits.value_ >> 32);
+      update(CN::HSTATEEN0H, managed.value_ >> 32, hbits.value_ >> 32);
+    }
+  else
+    {
+      update(CN::MSTATEEN0, managed.value_, mbits.value_);
+      update(CN::HSTATEEN0, managed.value_, hbits.value_);
+    }
+}
+
+
+template <typename URV>
+void
 CsRegs<URV>::enableSsqosid(bool flag)
 {
   ssqosidOn_ = flag;
@@ -5724,10 +5780,10 @@ CsRegs<URV>::defineStateEnableRegs()
   if (sizeof(URV) == 4)
     {
       mask = URV(0b11011111111) << 21;   // 31:21
-      defineCsr("sstateen0h", CsrNumber::MSTATEEN0H,  !mand, !imp, 0, mask, mask);
-      defineCsr("sstateen1h", CsrNumber::MSTATEEN1H,  !mand, !imp, 0, 0, 0);
-      defineCsr("sstateen2h", CsrNumber::MSTATEEN2H,  !mand, !imp, 0, 0, 0);
-      defineCsr("sstateen3h", CsrNumber::MSTATEEN3H,  !mand, !imp, 0, 0, 0);
+      defineCsr("mstateen0h", CsrNumber::MSTATEEN0H,  !mand, !imp, 0, mask, mask);
+      defineCsr("mstateen1h", CsrNumber::MSTATEEN1H,  !mand, !imp, 0, 0, 0);
+      defineCsr("mstateen2h", CsrNumber::MSTATEEN2H,  !mand, !imp, 0, 0, 0);
+      defineCsr("mstateen3h", CsrNumber::MSTATEEN3H,  !mand, !imp, 0, 0, 0);
 
       defineCsr("hstateen0h", CsrNumber::HSTATEEN0H,  !mand, !imp, 0, mask, mask);
       defineCsr("hstateen1h", CsrNumber::HSTATEEN1H,  !mand, !imp, 0, 0, 0);

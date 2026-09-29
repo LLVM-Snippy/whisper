@@ -846,6 +846,8 @@ Hart<URV>::processExtensions(bool verbose)
   enableSmijt(isa_.isEnabled(RvExtension::Smijt));
   enableSsijt(isa_.isEnabled(RvExtension::Ssijt));
 
+  csRegs_.updateStateenMasks();
+
   stimecmpActive_ = csRegs_.menvcfgStce();
   vstimecmpActive_ = csRegs_.henvcfgStce();
 }

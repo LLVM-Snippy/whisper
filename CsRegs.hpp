@@ -1071,24 +1071,8 @@ namespace WdRiscv
               csr->setReadMask(threshMask);
             }
         }
-      // Enable bit 53 (ACLIC) in mstateen0/hstateen0 write mask per ACLIC spec.
-      // This is done here rather than in addMachineFields() so the bit is only
-      // writable when ACLIC is actually implemented.  The existing addMachineFields()
-      // code enables stateen bits unconditionally (e.g. bit 58/IMSIC without checking
-      // for IMSIC), which is incorrect; that will be fixed separately.
-      if constexpr (sizeof(URV) == 8)
-        {
-          URV aclicBit = URV(1) << 53;
-          for (auto csrn : { CsrNumber::MSTATEEN0, CsrNumber::HSTATEEN0 })
-            {
-              auto csr = findCsr(csrn);
-              if (csr)
-                {
-                  csr->setWriteMask(csr->getWriteMask() | aclicBit);
-                  csr->setPokeMask(csr->getPokeMask() | aclicBit);
-                }
-            }
-        }
+      // Make bit 53 (ACLIC) of mstateen0/hstateen0 writable per ACLIC spec.
+      updateStateenMasks();
     }
 
     /// Return true if the given CSR number corresponds to a custom CSR (See table 3 of
@@ -2186,6 +2170,10 @@ namespace WdRiscv
 
     /// Enable/disable access to certain CSRs from non-machine mode.
     void enableSmstateen(bool flag);
+
+    /// Make the bits of MSTATEEN0/HSTATEEN0 that control the state of other
+    /// extensions writable if and only if that state is implemented.
+    void updateStateenMasks();
 
     /// Enable/disable Ssqosid extension.
     void enableSsqosid(bool flag);
