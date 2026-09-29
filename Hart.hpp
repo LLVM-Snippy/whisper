@@ -2620,21 +2620,35 @@ namespace WdRiscv
     /// Allow/disallow non-cachable regions to have AMO.
     void allowAmoInNonCachable(bool flag)
     {
-      pmaMgr_.setAllowAmoInNonCacheable(flag);
+      pmaMgr_.setAmoInNc(flag);
       syncPmamgrToPmacfg();
     }
 
     /// Allow/disallow IO regions to have AMO.
     void allowAmoInIo(bool flag)
     {
-      pmaMgr_.setAllowAmoInIo(flag);
+      pmaMgr_.setAmoInIo(flag);
+      syncPmamgrToPmacfg();
+    }
+
+    /// Allow/disallow IO regions to have LR/SC.
+    void allowRsrvInIo(bool flag)
+    {
+      pmaMgr_.setRsrvInIo(flag);
+      syncPmamgrToPmacfg();
+    }
+
+    /// Allow/disallow non-cacheable regions to have LR/SC.
+    void allowRsrvInNonCacheable(bool flag)
+    {
+      pmaMgr_.setRsrvInNc(flag);
       syncPmamgrToPmacfg();
     }
 
     void setAllowAmoInNonCachable(bool flag)  // Backward compatible. 
     { allowAmoInNonCachable(flag); } 
 
-    void setAllowAmoInIo(bool flag)
+    void setAllowAmoInIo(bool flag)  // Backwared compatible.
     { allowAmoInIo(flag); }
 
     /// Update the Pmamgr regions corresponding to the defined PMACFG CSRs.  This is done
@@ -3242,16 +3256,20 @@ namespace WdRiscv
 
       if (pbmt == VirtMem::Pbmt::Nc)
         {
-          if (not pmaManager().allowAmoInNonCacheable())
+          if (not pmaManager().amoInNc())
             pma.disable(Pma::Attrib::Amo);
+          if (bbl_ and not pmaManager().rsrvInNc())
+            pma.disable(Pma::Attrib::Rsrv);
           pma.enable(Pma::Attrib::Idempotent);
           pma.disable(Pma::Attrib::Io);
           pma.enable(Pma::Attrib::MisalOk);
         }
       else
         {
-          if (not pmaManager().allowAmoInIo())
+          if (not pmaManager().amoInIo())
             pma.disable(Pma::Attrib::Amo);
+          if (bbl_ and not pmaManager().rsrvInIo())
+            pma.disable(Pma::Attrib::Rsrv);
           pma.disable(Pma::Attrib::Idempotent);
           pma.enable(Pma::Attrib::Io);
           pma.disable(Pma::Attrib::MisalOk);

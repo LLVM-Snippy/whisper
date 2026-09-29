@@ -1097,6 +1097,18 @@ Interactive<URV>::pokeCommand(Hart<URV>& hart, const std::string& line,
 	    return false;
 	  hart.allowAmoInNonCachable(val);
 	}
+      else if (addrStr == "rsrvinio")
+	{
+	  if (not parseCmdLineNumber("value1", tokens.at(3), val))
+	    return false;
+	  hart.allowRsrvInIo(val);
+	}
+      else if (addrStr == "rsrvinnc")
+	{
+	  if (not parseCmdLineNumber("value1", tokens.at(3), val))
+	    return false;
+	  hart.allowRsrvInNonCacheable(val);
+	}
       return true;
     }
 

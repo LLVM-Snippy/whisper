@@ -1620,6 +1620,26 @@ HartConfig::applyMemoryConfig(System<URV>& system, Hart<URV>& hart) const
             errors++;
         }
 
+      tag = "allow_rsrv_in_non_cacheable_regions";
+      if (memMap.contains(tag))
+        {
+          bool flag = false;
+          if (getJsonBoolean(tag, memMap.at(tag), flag))
+            hart.allowRsrvInNonCacheable(flag);
+          else
+            errors++;
+        }
+
+      tag = "allow_rsrv_in_io_regions";
+      if (memMap.contains(tag))
+        {
+          bool flag = false;
+          if (getJsonBoolean(tag, memMap.at(tag), flag))
+            hart.allowRsrvInIo(flag);
+          else
+            errors++;
+        }
+
       tag = "default_pma";
       if (memMap.contains(tag))
         {

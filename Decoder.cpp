@@ -2294,12 +2294,10 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           return instTable_.getEntry(InstId::illegal);
 
         case 0b00010:       //   I-form
-          {
-            return instTable_.getEntry(InstId::illegal);
-          }
+          return instTable_.getEntry(InstId::illegal);  // Custom-0.
 
         case 0b00111:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal);  // Resrved.
 
         case 0b01001:
           {
@@ -2327,8 +2325,10 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           return instTable_.getEntry(InstId::illegal);
 
         case 0b01010:      //  S-form
+          return instTable_.getEntry(InstId::illegal);  // Custom-1.
+
         case 0b01111:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal);  // Reserved.
 
         case 0b10000:
           {
@@ -2396,7 +2396,7 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
         case 0b10101:
           return decodeVec(inst, op0, op1, op2, op3);
 
-        case 0b10110:  //  R-form custom vector opcode.
+        case 0b10110:  //  R-form custom vector opcode. Custom-2.
 	  {
 	    RFormInst rform(inst);
             op0 = rform.bits.rd;
@@ -2407,15 +2407,19 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
 	  }
 
         case 0b10111:
+          return instTable_.getEntry(InstId::illegal); // Reserved.
+
         case 0b11010:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal); // Reserved.
 
         case 0b11101:
           return decodeVecCryptoOrDot(inst, op0, op1, op2);
 
         case 0b11110:
+          return instTable_.getEntry(InstId::illegal);  // Custom-3.
+
         case 0b11111:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal);  // Reserved.
 
         case 0b00011: //  I-form
           {
