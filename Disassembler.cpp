@@ -525,6 +525,14 @@ printLfi(const Disassembler& disas, std::ostream& out, const DecodedInst& di)
 }
 
 
+static
+void
+printCustomInst(const Disassembler& /*disas*/, std::ostream& out, const DecodedInst& /*di*/)
+{
+  out << "custom";
+}
+
+
 void
 Disassembler::disassembleInst(uint32_t inst, const Decoder& decoder,
 			      std::string& str)
@@ -942,12 +950,12 @@ Disassembler::disassembleUncached(const DecodedInst& di, std::ostream& out) cons
       break;
 
     default:
-      if (di.instEntry()->isAtomic())
+      if (di.isAtomic())
 	printAmo(*this, out, di);
-      else if (di.instEntry()->isVector())
-        {
-          printVecInst(*this, out, di);
-        }
+      else if (di.isVector())
+        printVecInst(*this, out, di);
+      else if (di.instEntry()->isCustom())
+        printCustomInst(*this, out, di);
       else
 	printInst(*this, out, di);
     }

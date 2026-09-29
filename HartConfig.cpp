@@ -981,6 +981,16 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
 	}
     }
 
+  tag = "agnostic_override_for_overlap";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (getJsonBoolean(tag, vconf.at(tag), flag))
+        hart.configAgnosticOverrideForOverlap(flag);
+      else
+        errors++;
+    }
+
   tag = "trap_non_zero_vstart";
   if (vconf.contains(tag))
     {
@@ -1606,6 +1616,26 @@ HartConfig::applyMemoryConfig(System<URV>& system, Hart<URV>& hart) const
           bool flag = false;
           if (getJsonBoolean(tag, memMap.at(tag), flag))
             hart.allowAmoInIo(flag);
+          else
+            errors++;
+        }
+
+      tag = "allow_rsrv_in_non_cacheable_regions";
+      if (memMap.contains(tag))
+        {
+          bool flag = false;
+          if (getJsonBoolean(tag, memMap.at(tag), flag))
+            hart.allowRsrvInNonCacheable(flag);
+          else
+            errors++;
+        }
+
+      tag = "allow_rsrv_in_io_regions";
+      if (memMap.contains(tag))
+        {
+          bool flag = false;
+          if (getJsonBoolean(tag, memMap.at(tag), flag))
+            hart.allowRsrvInIo(flag);
           else
             errors++;
         }

@@ -449,6 +449,14 @@ namespace WdRiscv
     void configTailAgnosticAllOnes(bool flag)
     { tailAgnOnes_ = flag; }
 
+    /// When flag=true, instructions with destination/source overlap and differing element
+    /// widths will execute with mask agnostic and tail agnostic policies regardless of
+    /// VTYPE as recommended by the spec. When flag=false, such instructions will follow
+    /// the mask/tail policy of VTYPE which is legal since a policy of preserve is
+    /// compatible with a policy of agnostic.
+    void configAgnosticOverrideForOverlap(bool flag)
+    { agnOverride_ = flag; }
+
     /// If flag is false then vector segment load will not commit any of the fields
     /// at a given index if any of those fields encouters an exception. Otherwise, the
     /// fields up to the one that encoutered the exception are updated.
@@ -651,6 +659,10 @@ namespace WdRiscv
     /// floating point operations.
     void setAltfmt(bool flag)
     { altfmt_ = flag; }
+
+    /// Return true if agnostic override is on (see configAgnosticOverrideForOverlap.
+    bool agnosticOverride() const
+    { return agnOverride_; }
 
     /// Scoped override of the tail/mask agnostic policy: If force is true, make the
     /// policy tail-agnostic and mask-agnostic for the lifetime of this object. The
@@ -1012,7 +1024,8 @@ namespace WdRiscv
     bool partialSegLoad_ = false;
     bool partialSegStore_ = false;
     bool vmvrIgnoreVill_ = false;   // If true, allow vmv*r.v instructions to execute when vill is set.
-    bool altfmt_ = false;  // If true use BFloat16 instead of Float16 for half-precision.
+    bool altfmt_ = false;           // If true use BFloat16 instead of Float16 for half-precision.
+    bool agnOverride_ = true;       // If true override VTYPE agnostic bits for dest-source overlap.
 
     uint32_t groupX8_ = 8;    // Group multiplier as a number scaled by 8.
     uint32_t sewInBits_ = 8;  // SEW expressed in bits (Byte corresponds to 8).

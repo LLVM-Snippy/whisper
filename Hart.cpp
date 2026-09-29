@@ -11602,6 +11602,10 @@ Hart<URV>::execute(const DecodedInst* di)
       execZilx(di);
       return;
 
+    case InstId::custom:
+      illegalInst(di);
+      return;
+
     case InstId::endId_:
       assert(0 && "Error: Shouldn't be able to get here");
       return;

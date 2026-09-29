@@ -1001,11 +1001,15 @@ namespace WdRiscv
             {
               // Treat reserve-non-eventual as rsrv to match RTL.
               if (atype == 2 or atype == 3)
-                attrib |= Pma::Attrib::Rsrv;
+                {
+                  bool rsrvOk = io ? rsrvInIo_ : rsrvInNc_;
+                  if (rsrvOk)
+                    attrib |= Pma::Attrib::Rsrv;
+                }
 
               if (atype == 1 or atype == 3)
                 {
-                  bool amoOk = io ? allowAmoInIo_ : allowAmoInNonCacheable_;
+                  bool amoOk = io ? amoInIo_ : amoInNc_;
                   if (amoOk)
                     {
                       attrib |= Pma::Attrib::AmoSwap;
@@ -1065,7 +1069,7 @@ namespace WdRiscv
           if (write and !read and !exec)
             return false;
           if (amo != 0)
-            if (not allowAmoInIo_)
+            if (not amoInIo_)
               return false;   // IO region must have amo-none unless configured otherwise.
           if (write and not read)
             return false;  // Cannot have write without read.
@@ -1091,7 +1095,7 @@ namespace WdRiscv
           else
             { 
               if (amo != 0)
-                if (not allowAmoInNonCacheable_)
+                if (not amoInNc_)
                   return false;   // Non cachable region must have amo-none unless configured otherwise.
             }
         }
@@ -1107,39 +1111,45 @@ namespace WdRiscv
     /// Legalize the value of a PMACFG CSR: Modify next to make it legal. Use prev to
     /// retain fields that are illegal in next.
     uint64_t legalizePmacfg(uint64_t prev, uint64_t next) const
-    {
-      return isLegalPmacfg(next) ? next : prev;
-    }
+    { return isLegalPmacfg(next) ? next : prev; }
 
     /// Enable/disable AMO instructions in non-cacheable regions.
     ///
     /// Non-cachable regions must have amo-none (no amo supprt) if this method is called
     /// with flag=false; otherwise, they can have any amo type.
-    void setAllowAmoInNonCacheable(bool flag)
-    {
-      allowAmoInNonCacheable_ = flag;
-    }
+    void setAmoInNc(bool flag)
+    { amoInNc_ = flag; }
 
     /// Return true if AMO instructions may be executed in non-cachable regions.
-    bool allowAmoInNonCacheable() const
-    {
-      return allowAmoInNonCacheable_;
-    }
+    bool amoInNc() const
+    { return amoInNc_; }
 
     /// Enable/disable AMO instructions in IO regions.
     ///
     /// IO regions must have amo-none (no amo supprt) if this method is called with
     /// flag=false; otherwise, they can have any amo type.
-    void setAllowAmoInIo(bool flag)
-    {
-      allowAmoInIo_ = flag;
-    }
+    void setAmoInIo(bool flag)
+    { amoInIo_ = flag; }
 
     /// Return true if AMO instructions may be executed in IO regions.
-    bool allowAmoInIo() const
-    {
-      return allowAmoInIo_;
-    }
+    bool amoInIo() const
+    { return amoInIo_; }
+
+    /// Enable LR/SC instructions in IO regions.
+    void setRsrvInIo(bool flag)
+    { rsrvInIo_ = flag; }
+
+    /// Return true if LR/SC instructions are allowed in IO regions.
+    bool rsrvInIo() const
+    { return rsrvInIo_; }
+
+    /// Enable LR/SC instructions in non-cacheable regions.
+    void setRsrvInNc(bool flag)
+    { rsrvInNc_ = flag; }
+
+    /// Return true if LR/SC instructions are allowed in non-cacheable regions.
+    bool rsrvInNc() const
+    { return rsrvInNc_; }
 
     /// Return true if read will be successful if tried.
     bool checkRead(uint64_t address, unsigned readSize) const
@@ -1450,8 +1460,11 @@ namespace WdRiscv
     Pma defaultPma_{Pma::Attrib::Default};
     Pma noAccessPma_{Pma::Attrib::None};
 
-    bool allowAmoInNonCacheable_ = false;
-    bool allowAmoInIo_ = false;
+    bool amoInNc_ = false;
+    bool amoInIo_ = false;
+
+    bool rsrvInNc_ = true;
+    bool rsrvInIo_ = true;
 
     bool trace_ = false;  // Collect stats if true.
     mutable std::vector<PmaTrace> pmaTrace_;
