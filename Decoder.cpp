@@ -2294,7 +2294,7 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           return instTable_.getEntry(InstId::illegal);
 
         case 0b00010:       //   I-form
-          return instTable_.getEntry(InstId::custom);  // Custom-0.
+          return instTable_.getEntry(InstId::illegal);  // Custom-0.
 
         case 0b00111:
           return instTable_.getEntry(InstId::illegal);  // Resrved.
@@ -2325,7 +2325,7 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           return instTable_.getEntry(InstId::illegal);
 
         case 0b01010:      //  S-form
-          return instTable_.getEntry(InstId::custom);  // Custom-1.
+          return instTable_.getEntry(InstId::illegal);  // Custom-1.
 
         case 0b01111:
           return instTable_.getEntry(InstId::illegal);  // Reserved.
@@ -2402,7 +2402,7 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
             op0 = rform.bits.rd;
             op1 = rform.bits.rs2;  // Operand order reversed
             op2 = rform.bits.rs1;
-	    const InstEntry& illegal = instTable_.getEntry(InstId::custom);
+	    const InstEntry& illegal = instTable_.getEntry(InstId::illegal);
 	    return illegal;
 	  }
 
@@ -2416,7 +2416,7 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           return decodeVecCryptoOrDot(inst, op0, op1, op2);
 
         case 0b11110:
-          return instTable_.getEntry(InstId::custom);  // Custom-3.
+          return instTable_.getEntry(InstId::illegal);  // Custom-3.
 
         case 0b11111:
           return instTable_.getEntry(InstId::illegal);  // Reserved.
