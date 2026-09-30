@@ -12622,7 +12622,8 @@ Hart<URV>::execSret(const DecodedInst* di)
   // Set ELP.
   if (isRvZicfilp())
     {
-      setElp(isLandingPadEnabled(savedMode, savedVirt)? fields.bits_.SPELP : false);
+      bool nextVirt = virtMode_ or hstatus_.bits_.SPV; // Virt mode after sret.
+      setElp(isLandingPadEnabled(savedMode, nextVirt)? fields.bits_.SPELP : false);
       fields.bits_.SPELP = 0;
     }
 
