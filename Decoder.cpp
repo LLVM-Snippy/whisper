@@ -1936,7 +1936,7 @@ Decoder::expandCompressedInst(uint16_t inst) const
 	  if (not isRv64() and not isRvzclsd())
 	    {
 	      op1=8+cs.bits.rs1p; op0=8+cs.bits.rs2p; op2 = cs.swImmed();
-	      encodeFsw(op0, op1, op2, expanded);
+	      encodeFsw(op1, op0, op2, expanded);
 	      return expanded;
 	    }
 	  op1=8+cs.bits.rs1p; op0=8+cs.bits.rs2p; op2 = cs.sdImmed();
