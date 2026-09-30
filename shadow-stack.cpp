@@ -108,6 +108,8 @@ Hart<URV>::execSspush(const DecodedInst* di, unsigned regNum)
       return;
     }
 
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
+
   // write value
   URV data = intRegs_.read(regNum);
 #ifdef FAST_SLOPPY
@@ -140,6 +142,8 @@ Hart<URV>::execSspopchk(const DecodedInst* di, unsigned regNum)
       initiateStoreException(di, cause, ldStFaultAddr_, gaddr);
       return;
     }
+
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
 
   uint64_t data = 0;
 #ifdef FAST_SLOPPY
@@ -215,6 +219,8 @@ Hart<URV>::execSsamoswap_w(const DecodedInst* di)
       return;
     }
 
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
+
   uint64_t data = 0;
 #ifdef FAST_SLOPPY
   fastLoad<uint32_t>(di, ldStAddr_, data);
@@ -283,6 +289,7 @@ Hart<URV>::execSsamoswap_d(const DecodedInst* di)
       return;
     }
 
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
 
   uint64_t data = 0;
 #ifdef FAST_SLOPPY
