@@ -24,11 +24,11 @@ InstEntry::InstEntry(std::string name, InstId id,
 		     OperandType op1Type, OperandMode op1Mode, uint32_t op1Mask,
 		     OperandType op2Type, OperandMode op2Mode, uint32_t op2Mask,
 		     OperandType op3Type, OperandMode op3Mode, uint32_t op3Mask)
-  : name_(std::move(name)), id_(id), code_(code), codeMask_(mask),
+  : name_(std::move(name)), id_(id), code_(code), codeMask_(mask), ext_(ext), fmt_(fmt),
     op0Mask_(op0Mask), op1Mask_(op1Mask), op2Mask_(op2Mask), op3Mask_(op3Mask),
-    ext_(ext), fmt_(fmt),
     op0Type_(op0Type), op1Type_(op1Type), op2Type_(op2Type), op3Type_(op3Type),
     op0Mode_(op0Mode), op1Mode_(op1Mode), op2Mode_(op2Mode), op3Mode_(op3Mode)
+
 {
   unsigned count = 0;
 
@@ -38,8 +38,6 @@ InstEntry::InstEntry(std::string name, InstId id,
   if (op3Type != OperandType::None) count++;
   opCount_ = count;
   isBitManip_ = ext >= RvExtension::Zba and ext <= RvExtension::Zbs;
-
-  isCustom_ = id_ == InstId::custom;
 }
 
 
@@ -8064,10 +8062,6 @@ InstTable::setupInstVec()
 	OperandType::IntReg, OperandMode::Write, rdMask,
 	OperandType::IntReg, OperandMode::Read, rs1Mask,
 	OperandType::IntReg, OperandMode::Read, rs2Mask },
-
-      // Place holder. If a custom instruction is implemented the custom decoder will have
-      // its own id and its own InstEntry.
-      { "custom", InstId::custom, 0x0b, 0x7f } // Opcode field (0x0b) is not relevant.
 
     };
 }

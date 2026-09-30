@@ -1223,8 +1223,6 @@ namespace WdRiscv
      lxsuwhu,
      lxsuwwu,
 
-     custom,  // Place holder for all custom-0, 1, 2 and 3 opcodes
-
-     endId_    // Marker for iterating over IDs. Not a real ID.
+     endId_   // Marker for iterating over IDs. Not a real ID.
     };
 }

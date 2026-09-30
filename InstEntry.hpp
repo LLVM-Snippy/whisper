@@ -301,10 +301,6 @@ namespace WdRiscv
     bool isVector() const
     { return isVector_; }
 
-    /// Return true if this is a custom instruction.
-    bool isCustom() const
-    { return isCustom_; }
-
     /// Return true if this is a CMO instruction
     bool isCmo() const
     { return ext_ == RvExtension::Zicbom or
@@ -428,45 +424,43 @@ namespace WdRiscv
     uint32_t code_;      // Code with all operand bits set to zero.
     uint32_t codeMask_;  // Bit corresponding to code bits are 1. Bits
 
+    RvExtension ext_ = RvExtension::I;
+    RvFormat fmt_ = RvFormat::None;
+
     uint32_t op0Mask_;
     uint32_t op1Mask_;
     uint32_t op2Mask_;
     uint32_t op3Mask_;
-    RvExtension ext_ = RvExtension::I;
 
-    uint8_t ldSize_ = 0;      // Load size: Zero for non-load.
-    uint8_t stSize_ = 0;      // Store size: Zero for non-store.
-    uint8_t immShift_ = 0;    // Shift size of immediate operand (eg. lui op is shifted left by 12)
+    OperandType op0Type_;
+    OperandType op1Type_;
+    OperandType op2Type_;
+    OperandType op3Type_;
 
-    RvFormat fmt_        : 4 = RvFormat::None;
+    OperandMode op0Mode_;
+    OperandMode op1Mode_;
+    OperandMode op2Mode_;
+    OperandMode op3Mode_;
 
-    uint8_t opCount_     : 4 = 0;
-    OperandType op0Type_ : 4;
-    OperandType op1Type_ : 4;
-    OperandType op2Type_ : 4;
-    OperandType op3Type_ : 4;
-
-    OperandMode op0Mode_ : 4;
-    OperandMode op1Mode_ : 4;
-    OperandMode op2Mode_ : 4;
-    OperandMode op3Mode_ : 4;
-
-    bool isUns_       : 1 = false; // True if source operands are unsigned.
-    bool isBranch_    : 1 = false; // True if a branch instruction.
-    bool isCond_      : 1 = false; // True if conditional branch.
-    bool isRegBranch_ : 1 = false; // True if branch to register.
-    bool isBitManip_  : 1 = false; // True if bit manipulation instruction.
-    bool isLoad_      : 1 = false;
-    bool isStore_     : 1 = false;
-    bool isPerfLoad_  : 1 = false; // True if perf counters view instr as load.
-    bool isPerfStore_ : 1 = false; // True if perf counters view instr as store.
-    bool hasRm_       : 1 = false; // True if instr has an explicit rounding mode.
-    bool modsFflags_  : 1 = false; // True if instr modified FFLAGS.
-    bool isDiv_       : 1 = false; // True for integer divide or remainder instr.
-    bool isComp32_    : 1 = false; // True if compressed rv32 instruction variant.
-    bool isComp64_    : 1 = false; // True if compressed rv64 instruction variant.
-    bool isVector_    : 1 = false; // True if V extension or other vector sub-extension.
-    bool isCustom_    : 1 = false; // True if custom opcode.
+    unsigned opCount_{0};
+    unsigned ldSize_ = 0;      // Load size: Zero for non-load.
+    unsigned stSize_ = 0;      // Store size: Zero for non-store.
+    unsigned immShift_ = 0;    // Shift size of immediate operand (eg. lui op is shifted left by 12)
+    bool isUns_ = false;       // True if source operands are unsigned.
+    bool isBranch_ = false;    // True if a branch instruction.
+    bool isCond_ = false;      // True if conditional branch.
+    bool isRegBranch_ = false; // True if branch to register.
+    bool isBitManip_ = false;  // True if bit manipulation instruction.
+    bool isLoad_ = false;
+    bool isStore_ = false;
+    bool isPerfLoad_ = false;  // True if perf counters view instr as load.
+    bool isPerfStore_ = false; // True if perf counters view instr as store.
+    bool hasRm_ = false;       // True if instr has an explicit rounding mode .
+    bool modsFflags_ = false;  // True if instr modified FFLAGS.
+    bool isDiv_ = false;       // True for integer divide or remainder instr.
+    bool isComp32_ = false;    // True if compressed rv32 instruction variant.
+    bool isComp64_ = false;    // True if compressed rv64 instruction variant.
+    bool isVector_ = false;    // True if V extension or other vector sub-extension.
   };
 
 
