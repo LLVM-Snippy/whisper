@@ -5807,39 +5807,41 @@ CsRegs<URV>::defineStateEnableRegs()
   bool mand = true;  // Mndatory
   bool imp = true;   // Implemented
 
+  using enum CsrNumber;
+
   // Default: none of the sstateen CSRs are writable.
-  defineCsr("sstateen0", CsrNumber::SSTATEEN0,  !mand, !imp, 0, 0, 0);
-  defineCsr("sstateen1", CsrNumber::SSTATEEN1,  !mand, !imp, 0, 0, 0);
-  defineCsr("sstateen2", CsrNumber::SSTATEEN2,  !mand, !imp, 0, 0, 0);
-  defineCsr("sstateen3", CsrNumber::SSTATEEN3,  !mand, !imp, 0, 0, 0);
+  defineCsr("sstateen0", SSTATEEN0,  !mand, !imp, 0, 0, 0);
+  defineCsr("sstateen1", SSTATEEN1,  !mand, !imp, 0, 0, 0);
+  defineCsr("sstateen2", SSTATEEN2,  !mand, !imp, 0, 0, 0);
+  defineCsr("sstateen3", SSTATEEN3,  !mand, !imp, 0, 0, 0);
 
   URV mask = 0;  // Default: nothing writable.
 
   if constexpr (sizeof(URV) == 8)
     mask = uint64_t(0b11011110111) << 53;  // Bits 63:53
 
-  defineCsr("mstateen0", CsrNumber::MSTATEEN0,  !mand, !imp, 0, mask, mask);
-  defineCsr("mstateen1", CsrNumber::MSTATEEN1,  !mand, !imp, 0, 0, 0);
-  defineCsr("mstateen2", CsrNumber::MSTATEEN2,  !mand, !imp, 0, 0, 0);
-  defineCsr("mstateen3", CsrNumber::MSTATEEN3,  !mand, !imp, 0, 0, 0);
+  defineCsr("mstateen0", MSTATEEN0,  !mand, !imp, 0, mask, mask);
+  defineCsr("mstateen1", MSTATEEN1,  !mand, !imp, 0, 0, 0);
+  defineCsr("mstateen2", MSTATEEN2,  !mand, !imp, 0, 0, 0);
+  defineCsr("mstateen3", MSTATEEN3,  !mand, !imp, 0, 0, 0);
 
-  defineCsr("hstateen0", CsrNumber::HSTATEEN0,  !mand, !imp, 0, mask, mask)->setHypervisor(true);
-  defineCsr("hstateen1", CsrNumber::HSTATEEN1,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
-  defineCsr("hstateen2", CsrNumber::HSTATEEN2,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
-  defineCsr("hstateen3", CsrNumber::HSTATEEN3,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
+  defineCsr("hstateen0", HSTATEEN0,  !mand, !imp, 0, mask, mask)->setHypervisor(true);
+  defineCsr("hstateen1", HSTATEEN1,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
+  defineCsr("hstateen2", HSTATEEN2,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
+  defineCsr("hstateen3", HSTATEEN3,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
 
   if (sizeof(URV) == 4)
     {
       mask = URV(0b11011111111) << 21;   // 31:21
-      defineCsr("mstateen0h", CsrNumber::MSTATEEN0H,  !mand, !imp, 0, mask, mask);
-      defineCsr("mstateen1h", CsrNumber::MSTATEEN1H,  !mand, !imp, 0, 0, 0);
-      defineCsr("mstateen2h", CsrNumber::MSTATEEN2H,  !mand, !imp, 0, 0, 0);
-      defineCsr("mstateen3h", CsrNumber::MSTATEEN3H,  !mand, !imp, 0, 0, 0);
+      defineCsr("mstateen0h", MSTATEEN0H,  !mand, !imp, 0, mask, mask);
+      defineCsr("mstateen1h", MSTATEEN1H,  !mand, !imp, 0, 0, 0);
+      defineCsr("mstateen2h", MSTATEEN2H,  !mand, !imp, 0, 0, 0);
+      defineCsr("mstateen3h", MSTATEEN3H,  !mand, !imp, 0, 0, 0);
 
-      defineCsr("hstateen0h", CsrNumber::HSTATEEN0H,  !mand, !imp, 0, mask, mask);
-      defineCsr("hstateen1h", CsrNumber::HSTATEEN1H,  !mand, !imp, 0, 0, 0);
-      defineCsr("hstateen2h", CsrNumber::HSTATEEN2H,  !mand, !imp, 0, 0, 0);
-      defineCsr("hstateen3h", CsrNumber::HSTATEEN3H,  !mand, !imp, 0, 0, 0);
+      defineCsr("hstateen0h", HSTATEEN0H,  !mand, !imp, 0, mask, mask)->setHypervisor(true);
+      defineCsr("hstateen1h", HSTATEEN1H,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
+      defineCsr("hstateen2h", HSTATEEN2H,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
+      defineCsr("hstateen3h", HSTATEEN3H,  !mand, !imp, 0, 0, 0)->setHypervisor(true);
     }
 }
 
