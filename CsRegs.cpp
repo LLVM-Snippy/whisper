@@ -2515,9 +2515,20 @@ CsRegs<URV>::enableSsnpm(bool flag)
       hf.bits_.PMM = mask;
       regs_.at(size_t(CN::HENVCFG)).setReadMask(hf.value_);
 
-      HstatusFields<uint64_t> hs{regs_.at(size_t(CN::HSTATUS)).getReadMask()};
-      hs.bits_.HUPMM = mask;
-      regs_.at(size_t(CN::HSTATUS)).setReadMask(hs.value_);
+      // Make HSTATUS.HUPMM read-only-zero or writable.
+      auto& hstatus = regs_.at(size_t(CN::HSTATUS));
+
+      HstatusFields<uint64_t> hsf{hstatus.getReadMask()};
+      hsf.bits_.HUPMM = mask;
+      hstatus.setReadMask(hsf.value_);
+
+      hsf.value_ = hstatus.getPokeMask();
+      hsf.bits_.HUPMM = mask;
+      hstatus.setPokeMask(hsf.value_);
+
+      hsf.value_ = hstatus.getWriteMask();
+      hsf.bits_.HUPMM = mask;
+      hstatus.setWriteMask(hsf.value_);
     }
 }
 
