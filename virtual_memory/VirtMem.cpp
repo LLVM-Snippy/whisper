@@ -754,13 +754,8 @@ VirtMem::pageTableWalk(uint64_t address, PrivilegeMode privMode, bool read, bool
 
       // 3.
       if (not isValidPte(pte))
-        {
-          if (not isSsPte(pte) or not ssEnabled_)  // Reserved encoding.
-            return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
-          // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
-          if (not exec and isSsAccessFault(read))
-            return traceException(accessFaultType(read, write, exec), exec, walkIx);
-        }
+        if (not ssMode_ or (ssEnabled_ and not isSsPte(pte)))
+          return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
 
       // 4.
       global = global or pte.global();
@@ -791,6 +786,7 @@ VirtMem::pageTableWalk(uint64_t address, PrivilegeMode privMode, bool read, bool
 	}
       else if (pte.pbmt() != 0)
         return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);  // Reserved pbmt bits must be 0.
+
       if (privMode == PrivilegeMode::User and not pte.user())
         return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
       if (privMode == PrivilegeMode::Supervisor and pte.user() and
@@ -962,7 +958,8 @@ VirtMem::stage2PageTableWalk(uint64_t address, bool read, bool write, bool exec,
 
       // 3.
       if (not isValidPte(pte))
-        return traceException(stage2PageFaultType(read, write, exec), forFetch_, walkIx);
+        if (not ssMode_ or (ssEnabled_ and not isSsPte(pte)))
+          return traceException(stage2PageFaultType(read, write, exec), exec, walkIx);
 
       // 4.
       global = global or pte.global();
@@ -1164,13 +1161,8 @@ VirtMem::stage1PageTableWalk(uint64_t address, PrivilegeMode privMode, bool read
 
       // 3.
       if (not isValidPte(pte))
-        {
-          if (not isSsPte(pte) or not vsSsEnabled_)  // Reserved encoding.
-            return traceException(stage1PageFaultType(read, write, exec), forFetch_, walkIx);
-          // Zicfiss: a non-SS store or a CBO to an SS page is an access fault.
-          if (not exec and isSsAccessFault(read))
-            return traceException(accessFaultType(read, write, exec), forFetch_, walkIx);
-        }
+        if (not ssMode_ or (ssEnabled_ and not isSsPte(pte)))
+          return traceException(stage1PageFaultType(read, write, exec), exec, walkIx);
 
       // 4.
       global = global or pte.global();
