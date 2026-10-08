@@ -625,7 +625,7 @@ RVMSimExecStatus Model<URV>::executeInstr() {
 
           bytes.clear();
           if (!Hart->peekVecRegLsb(reg, bytes))
-            continue;
+            throw std::runtime_error("This VReg does not exist");
 
           const size_t n = std::min(data.size(), bytes.size());
           std::fill(data.begin(), data.end(), 0);
@@ -647,7 +647,11 @@ RVMSimExecStatus Model<URV>::executeInstr() {
       std::vector<WdRiscv::CsrNumber> csrs;
       Hart->lastCsr(csrs);
       for (auto csr : csrs) {
-        const auto value = Hart->lastCsrValue(csr);
+        // Hart::lastCsrValue returns the value prior to the instruction
+        URV value = 0;
+        if (!Hart->peekCsr(csr, value))
+          throw std::runtime_error("This CSR does not exist");
+
         const auto csrNumber = static_cast<unsigned>(csr);
         writeDebug("notify: csr 0x%03x=0x%016llx\n",
                    csrNumber,
