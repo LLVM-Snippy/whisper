@@ -1,5 +1,5 @@
-#include "SnippyWhisperModel.h"
 #include "RISCVModel/VTable.h"
+#include "SnippyWhisperModel.h"
 
 #include <algorithm>
 #include <cassert>
@@ -22,11 +22,8 @@ const ModelBase *asConstModel(const RVMState *state) {
   return reinterpret_cast<const ModelBase *>(state);
 }
 
-static void writeErr(RVMErrorCode code,
-                     const char *message,
-                     RVMErrorCode *err,
-                     char *errBuf,
-                     size_t errBufSize) {
+static void writeErr(RVMErrorCode code, const char *message, RVMErrorCode *err,
+                     char *errBuf, size_t errBufSize) {
   if (err)
     *err = code;
 
@@ -46,32 +43,29 @@ extern "C" {
 
 uint32_t RVMInterfaceVersion = RVMAPI_CURRENT_INTERFACE_VERSION;
 
-RVMState *rvm_modelCreate(const RVMConfig *config,
-                          RVMErrorCode *err,
-                          char *errBuf,
-                          size_t errBufSize) {
+RVMState *rvm_modelCreate(const RVMConfig *config, RVMErrorCode *err,
+                          char *errBuf, size_t errBufSize) {
   try {
     if (!config) {
-      writeErr(RVM_ERRC_INVALID_ARGUMENT, "modelCreate: config is null", err, errBuf, errBufSize);
+      writeErr(RVM_ERRC_INVALID_ARGUMENT, "modelCreate: config is null", err,
+               errBuf, errBufSize);
       return nullptr;
     }
 
     if (config->Extensions.ZExtSize != sizeof(config->Extensions.ZExt) ||
         config->Extensions.XExtSize != sizeof(config->Extensions.XExt)) {
       writeErr(RVM_ERRC_INCOMPATIBLE,
-               "modelCreate: RVMExtDescriptor ZExtSize/XExtSize does not match this ABI",
-               err,
-               errBuf,
-               errBufSize);
+               "modelCreate: RVMExtDescriptor ZExtSize/XExtSize does not match "
+               "this ABI",
+               err, errBuf, errBufSize);
       return nullptr;
     }
 
     if (config->MemoryRegionCount && !config->MemoryRegions) {
       writeErr(RVM_ERRC_INVALID_ARGUMENT,
-               "modelCreate: MemoryRegions is null while MemoryRegionCount is non-zero",
-               err,
-               errBuf,
-               errBufSize);
+               "modelCreate: MemoryRegions is null while MemoryRegionCount is "
+               "non-zero",
+               err, errBuf, errBufSize);
       return nullptr;
     }
 
@@ -87,14 +81,13 @@ RVMState *rvm_modelCreate(const RVMConfig *config,
     writeErr(RVM_ERRC_UNRECOVERABLE_ERROR, e.what(), err, errBuf, errBufSize);
     return nullptr;
   } catch (...) {
-    writeErr(RVM_ERRC_UNRECOVERABLE_ERROR, "modelCreate: unknown exception", err, errBuf, errBufSize);
+    writeErr(RVM_ERRC_UNRECOVERABLE_ERROR, "modelCreate: unknown exception",
+             err, errBuf, errBufSize);
     return nullptr;
   }
 }
 
-void rvm_modelDestroy(RVMState *state) {
-  delete asModel(state);
-}
+void rvm_modelDestroy(RVMState *state) { delete asModel(state); }
 
 void rvm_modelReset(RVMState *state) {
   if (state)
@@ -116,13 +109,15 @@ RVMSimExecStatus rvm_executeInstr(RVMState *state) {
   }
 }
 
-RVMErrorCode rvm_readMem(const RVMState *state, uint64_t addr, size_t count, char *data) {
+RVMErrorCode rvm_readMem(const RVMState *state, uint64_t addr, size_t count,
+                         char *data) {
   if (!state)
     return RVM_ERRC_INVALID_ARGUMENT;
   return asConstModel(state)->readMem(addr, count, data);
 }
 
-RVMErrorCode rvm_writeMem(RVMState *state, uint64_t addr, size_t count, const char *data) {
+RVMErrorCode rvm_writeMem(RVMState *state, uint64_t addr, size_t count,
+                          const char *data) {
   if (!state)
     return RVM_ERRC_INVALID_ARGUMENT;
   return asModel(state)->writeMem(addr, count, data);
@@ -185,13 +180,15 @@ RVMErrorCode rvm_setCSR(RVMState *state, unsigned csr, RVMRegT value) {
   return asModel(state)->setCSR(csr, value);
 }
 
-RVMErrorCode rvm_readVReg(const RVMState *state, RVMVReg reg, char *data, size_t *maxSize) {
+RVMErrorCode rvm_readVReg(const RVMState *state, RVMVReg reg, char *data,
+                          size_t *maxSize) {
   if (!state)
     return RVM_ERRC_INVALID_ARGUMENT;
   return asConstModel(state)->readVReg(reg, data, maxSize);
 }
 
-RVMErrorCode rvm_setVReg(RVMState *state, RVMVReg reg, const char *data, size_t *dataSize) {
+RVMErrorCode rvm_setVReg(RVMState *state, RVMVReg reg, const char *data,
+                         size_t *dataSize) {
   if (!state)
     return RVM_ERRC_INVALID_ARGUMENT;
   return asModel(state)->setVReg(reg, data, dataSize);
@@ -214,9 +211,7 @@ void rvm_logMessage(const RVMState *state, const char *message) {
     asConstModel(state)->logMessage(message);
 }
 
-int rvm_queryCallbackSupportPresent(const RVMState *) {
-  return 1;
-}
+int rvm_queryCallbackSupportPresent(const RVMState *) { return 1; }
 
 void rvm_getErrorContext(const RVMState *state, char *buf, size_t *bufSize) {
   if (!bufSize)

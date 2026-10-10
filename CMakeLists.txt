@@ -113,6 +113,12 @@ add_custom_target(whisper_softfloat
   DEPENDS "${WHISPER_SOFTFLOAT_LIBRARY}"
 )
 
+file(GLOB_RECURSE WHISPER_CORE_SOURCES CONFIGURE_DEPENDS
+     "${WHISPER_ROOT}/*.cpp"
+     "${WHISPER_ROOT}/*.cc"
+     "${WHISPER_ROOT}/*.h"
+     "${WHISPER_ROOT}/*.hpp")
+
 # Build Whisper core with its native GNUmakefile, but do not build the CLI executable.
 #
 # Building 'all' may try to link the whisper binary and fail on Args/Session/HartConfig,
@@ -162,6 +168,7 @@ add_custom_command(
   DEPENDS
     "${WHISPER_ROOT}/GNUmakefile"
     whisper_softfloat
+    ${WHISPER_CORE_SOURCES}
   VERBATIM
 )
 

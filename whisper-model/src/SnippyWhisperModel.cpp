@@ -1,15 +1,15 @@
 #include "SnippyWhisperModel.h"
 
-#include "System.hpp"
-#include "Hart.hpp"
 #include "CsRegs.hpp"
-#include "Isa.hpp"
 #include "DecodedInst.hpp"
+#include "Hart.hpp"
+#include "Isa.hpp"
+#include "System.hpp"
 
 #include <algorithm>
+#include <cstdarg>
 #include <cstdint>
 #include <cstdio>
-#include <cstdarg>
 #include <cstring>
 #include <set>
 #include <stdexcept>
@@ -29,8 +29,7 @@ static uint64_t defaultMemSize(const RVMConfig *config) {
   return end ? end : 128ull * 1024ull * 1024ull;
 }
 
-template <typename URV>
-Model<URV>::Model(const RVMConfig *config) {
+template <typename URV> Model<URV>::Model(const RVMConfig *config) {
   copyConfig(config);
 
   const size_t memSize = defaultMemSize(&Config);
@@ -39,9 +38,7 @@ Model<URV>::Model(const RVMConfig *config) {
   System = std::make_unique<SystemT>(
       /*coreCount=*/1,
       /*hartsPerCore=*/1,
-      /*hartIdOffset=*/1,
-      memSize,
-      pageSize);
+      /*hartIdOffset=*/1, memSize, pageSize);
 
   Hart = System->ithHart(0);
   if (!Hart)
@@ -54,20 +51,15 @@ Model<URV>::Model(const RVMConfig *config) {
   if (Config.Mode == RVM_STOP_BY_PC)
     setStopPC(Config.StopAddr);
 
-  writeTrace("SnippyWhisperModel created: RV%u VLEN=%u StopMode=%u StopPC=0x%016llx\n",
-             Config.RV64 ? 64u : 32u,
-             Config.VLEN,
-             static_cast<unsigned>(StopMode),
-             static_cast<unsigned long long>(StopPC));
+  writeTrace(
+      "SnippyWhisperModel created: RV%u VLEN=%u StopMode=%u StopPC=0x%016llx\n",
+      Config.RV64 ? 64u : 32u, Config.VLEN, static_cast<unsigned>(StopMode),
+      static_cast<unsigned long long>(StopPC));
 }
 
-template <typename URV>
-Model<URV>::~Model() {
-  closeLogs();
-}
+template <typename URV> Model<URV>::~Model() { closeLogs(); }
 
-template <typename URV>
-void Model<URV>::copyConfig(const RVMConfig *config) {
+template <typename URV> void Model<URV>::copyConfig(const RVMConfig *config) {
   Config = *config;
 
   Regions.assign(config->MemoryRegions,
@@ -108,8 +100,7 @@ static FILE *openRVMLogFile(const char *path, bool &shouldClose) {
   return file;
 }
 
-template <typename URV>
-void Model<URV>::openLogs() {
+template <typename URV> void Model<URV>::openLogs() {
   TraceFile = openRVMLogFile(Config.LogFilePath, CloseTraceFile);
   if (Config.LogFilePath && !TraceFile)
     throw std::runtime_error("Cannot open Whisper trace file");
@@ -121,8 +112,7 @@ void Model<URV>::openLogs() {
 #endif
 }
 
-template <typename URV>
-void Model<URV>::closeLogs() {
+template <typename URV> void Model<URV>::closeLogs() {
   if (TraceFile && CloseTraceFile)
     std::fclose(TraceFile);
 #if 1
@@ -196,8 +186,7 @@ void Model<URV>::setErrorContext(const char *fmt, ...) const {
   LastErrorContext.assign(dyn.data(), static_cast<size_t>(n));
 }
 
-template <typename URV>
-void Model<URV>::clearErrorContext() const {
+template <typename URV> void Model<URV>::clearErrorContext() const {
   LastErrorContext.clear();
 }
 
@@ -240,7 +229,9 @@ static bool rvmXExtEnabled(const RVMConfig &config, RVMXExt ext) {
 
 static std::string rvmZExtName(RVMZExt ext) {
   switch (ext) {
-#define RVM_ZEXT_NAME_CASE(Name, name) case Name: return std::string("z") + #name;
+#define RVM_ZEXT_NAME_CASE(Name, name)                                         \
+  case Name:                                                                   \
+    return std::string("z") + #name;
     RVM_FOR_EACH_ZEXT(RVM_ZEXT_NAME_CASE)
 #undef RVM_ZEXT_NAME_CASE
   default:
@@ -250,7 +241,9 @@ static std::string rvmZExtName(RVMZExt ext) {
 
 static std::string rvmXExtName(RVMXExt ext) {
   switch (ext) {
-#define RVM_XEXT_NAME_CASE(Name, name) case Name: return std::string("x") + #name;
+#define RVM_XEXT_NAME_CASE(Name, name)                                         \
+  case Name:                                                                   \
+    return std::string("x") + #name;
     RVM_FOR_EACH_XEXT(RVM_XEXT_NAME_CASE)
 #undef RVM_XEXT_NAME_CASE
   default:
@@ -270,8 +263,7 @@ bool Model<URV>::whisperSupportsExtension(std::string_view name) const {
   return isa.isSupported(ext);
 }
 
-template <typename URV>
-std::string Model<URV>::buildIsaString() const {
+template <typename URV> std::string Model<URV>::buildIsaString() const {
   std::string isa = Config.RV64 ? "rv64" : "rv32";
   std::string singleLetterExts;
   std::set<std::string> appendedLongExts;
@@ -323,16 +315,26 @@ std::string Model<URV>::buildIsaString() const {
     appendLong("zifencei");
   }
 
-  if (rvmMisaEnabled(Config, RVM_MISA_M)) appendSingle('m');
-  if (rvmMisaEnabled(Config, RVM_MISA_A)) appendSingle('a');
-  if (rvmMisaEnabled(Config, RVM_MISA_F)) appendSingle('f');
-  if (rvmMisaEnabled(Config, RVM_MISA_D)) appendSingle('d');
-  if (rvmMisaEnabled(Config, RVM_MISA_C)) appendSingle('c');
-  if (rvmMisaEnabled(Config, RVM_MISA_B)) appendSingle('b');
-  if (rvmMisaEnabled(Config, RVM_MISA_H)) appendSingle('h');
-  if (rvmMisaEnabled(Config, RVM_MISA_N)) appendSingle('n');
-  if (rvmMisaEnabled(Config, RVM_MISA_S)) appendSingle('s');
-  if (rvmMisaEnabled(Config, RVM_MISA_U)) appendSingle('u');
+  if (rvmMisaEnabled(Config, RVM_MISA_M))
+    appendSingle('m');
+  if (rvmMisaEnabled(Config, RVM_MISA_A))
+    appendSingle('a');
+  if (rvmMisaEnabled(Config, RVM_MISA_F))
+    appendSingle('f');
+  if (rvmMisaEnabled(Config, RVM_MISA_D))
+    appendSingle('d');
+  if (rvmMisaEnabled(Config, RVM_MISA_C))
+    appendSingle('c');
+  if (rvmMisaEnabled(Config, RVM_MISA_B))
+    appendSingle('b');
+  if (rvmMisaEnabled(Config, RVM_MISA_H))
+    appendSingle('h');
+  if (rvmMisaEnabled(Config, RVM_MISA_N))
+    appendSingle('n');
+  if (rvmMisaEnabled(Config, RVM_MISA_S))
+    appendSingle('s');
+  if (rvmMisaEnabled(Config, RVM_MISA_U))
+    appendSingle('u');
 
   if (rvmMisaEnabled(Config, RVM_MISA_V)) {
     // Current Whisper requires scalar F/D to accept the V bit in MISA. Enabling
@@ -340,13 +342,15 @@ std::string Model<URV>::buildIsaString() const {
     // generated instruction stream unchanged.
     if (!rvmMisaEnabled(Config, RVM_MISA_F)) {
 #if 1
-      writeDebug("ISA mapping: enabling F because Whisper requires F/D for V\n");
+      writeDebug(
+          "ISA mapping: enabling F because Whisper requires F/D for V\n");
 #endif
       appendSingle('f');
     }
     if (!rvmMisaEnabled(Config, RVM_MISA_D)) {
 #if 1
-      writeDebug("ISA mapping: enabling D because Whisper requires F/D for V\n");
+      writeDebug(
+          "ISA mapping: enabling D because Whisper requires F/D for V\n");
 #endif
       appendSingle('d');
     }
@@ -375,8 +379,7 @@ std::string Model<URV>::buildIsaString() const {
   return isa;
 }
 
-template <typename URV>
-void Model<URV>::configureExtensions() {
+template <typename URV> void Model<URV>::configureExtensions() {
   const std::string isa = buildIsaString();
 #if 1
   writeDebug("ISA mapping: configuring Whisper ISA '%s'\n", isa.c_str());
@@ -390,8 +393,7 @@ void Model<URV>::configureExtensions() {
   }
 }
 
-template <typename URV>
-void Model<URV>::configureHart() {
+template <typename URV> void Model<URV>::configureHart() {
   configureExtensions();
   Hart->reset();
   Hart->setCacheLineSize(8);
@@ -404,8 +406,6 @@ void Model<URV>::configureHart() {
                        /*maxBytesPerElem=*/8,
                        /*minSewPerLmul=*/nullptr,
                        /*maxSewPerLmul=*/nullptr);
-    Hart->configMaskAgnosticAllOnes(Config.ChangeMaskAgnosticElems);
-    Hart->configTailAgnosticAllOnes(Config.ChangeTailAgnosticElems);
     // for each EEW, enable use of canonical NaN in vfredusum/vfwredusum result
     Hart->configVectorFpUnorderedSumCanonical(WdRiscv::ElementWidth::Byte,
                                               true);
@@ -415,27 +415,26 @@ void Model<URV>::configureHart() {
                                               true);
     Hart->configVectorFpUnorderedSumCanonical(WdRiscv::ElementWidth::Word2,
                                               true);
+    Hart->enableTrapNonZeroVstart(false);
   }
 }
 
-template <typename URV>
-void Model<URV>::reset() {
-  Hart->reset();
-}
+template <typename URV> void Model<URV>::reset() { Hart->reset(); }
 
 namespace {
 
 template <typename T>
-static void appendLittleEndianBytes(T value, unsigned size, std::vector<char> &out) {
+static void appendLittleEndianBytes(T value, unsigned size,
+                                    std::vector<char> &out) {
   out.resize(size);
   for (unsigned i = 0; i < size; ++i)
-    out[i] = static_cast<char>((static_cast<uint64_t>(value) >> (8 * i)) & 0xffu);
+    out[i] =
+        static_cast<char>((static_cast<uint64_t>(value) >> (8 * i)) & 0xffu);
 }
 
 } // namespace
 
-template <typename URV>
-RVMSimExecStatus Model<URV>::executeInstr() {
+template <typename URV> RVMSimExecStatus Model<URV>::executeInstr() {
   const uint64_t pcBefore = readPC();
   writeTrace("step: pc_before=0x%016llx\n",
              static_cast<unsigned long long>(pcBefore));
@@ -453,9 +452,10 @@ RVMSimExecStatus Model<URV>::executeInstr() {
                static_cast<int>(e.type()),
                static_cast<unsigned long long>(e.value()));
 
-    // CoreException is not an architectural trap trace. Whisper may throw it for
-    // stop/tohost/exit. There is no reliable per-instruction change log to report
-    // here unless singleStep completed, so callbacks intentionally remain silent.
+    // CoreException is not an architectural trap trace. Whisper may throw it
+    // for stop/tohost/exit. There is no reliable per-instruction change log to
+    // report here unless singleStep completed, so callbacks intentionally
+    // remain silent.
     if (e.type() == WdRiscv::CoreException::Stop ||
         e.type() == WdRiscv::CoreException::Exit)
       return RVM_STEP_FINISH;
@@ -529,6 +529,8 @@ RVMSimExecStatus Model<URV>::executeInstr() {
         const auto &vLdStInfo = Hart->getLastVectorMemory();
         auto size = vLdStInfo.elemSize_;
         for (const auto &elem : vLdStInfo.elems_) {
+          if (elem.skip_)
+            continue;
           auto data = elem.data_;
           auto virtAddr = elem.va_;
           writeDebug("notify: mem-read addr=0x%016llx size=%u\n",
@@ -567,6 +569,8 @@ RVMSimExecStatus Model<URV>::executeInstr() {
         const auto &vLdStInfo = Hart->getLastVectorMemory();
         auto size = vLdStInfo.elemSize_;
         for (const auto &elem : vLdStInfo.elems_) {
+          if (elem.skip_)
+            continue;
           auto data = elem.data_;
           auto virtAddr = elem.va_;
           writeDebug("notify: mem-write addr=0x%016llx size=%u\n",
@@ -582,8 +586,7 @@ RVMSimExecStatus Model<URV>::executeInstr() {
       if (reg > 0) { // x0 is immutable and should not be reported.
         URV value = 0;
         if (Hart->peekIntReg(static_cast<unsigned>(reg), value)) {
-          writeDebug("notify: xreg x%d=0x%016llx\n",
-                     reg,
+          writeDebug("notify: xreg x%d=0x%016llx\n", reg,
                      static_cast<unsigned long long>(value));
           Config.XRegUpdateCallback(Config.CallbackHandler,
                                     static_cast<RVMXReg>(reg),
@@ -597,8 +600,7 @@ RVMSimExecStatus Model<URV>::executeInstr() {
       if (reg >= 0) {
         uint64_t value = 0;
         if (Hart->peekFpReg(static_cast<unsigned>(reg), value)) {
-          writeDebug("notify: freg f%d=0x%016llx\n",
-                     reg,
+          writeDebug("notify: freg f%d=0x%016llx\n", reg,
                      static_cast<unsigned long long>(value));
           Config.FRegUpdateCallback(Config.CallbackHandler,
                                     static_cast<RVMFReg>(reg),
@@ -607,14 +609,15 @@ RVMSimExecStatus Model<URV>::executeInstr() {
       }
     }
 
-    if (Config.VRegUpdateCallback && !trapped && di.isValid() && di.isVector()) {
+    if (Config.VRegUpdateCallback && !trapped && di.isValid() &&
+        di.isVector()) {
       unsigned group = 1;
       const int firstReg = Hart->lastVecReg(di, group);
       if (firstReg >= 0) {
         const unsigned regCount = std::max(1u, group);
         const size_t vlenBytes = Hart->vecRegSize()
-                                   ? Hart->vecRegSize()
-                                   : static_cast<size_t>(Config.VLEN / 8);
+                                     ? Hart->vecRegSize()
+                                     : static_cast<size_t>(Config.VLEN / 8);
         std::vector<uint8_t> bytes;
         std::vector<char> data(vlenBytes);
 
@@ -631,13 +634,10 @@ RVMSimExecStatus Model<URV>::executeInstr() {
           std::fill(data.begin(), data.end(), 0);
           std::memcpy(data.data(), bytes.data(), n);
 
-          writeDebug("notify: vreg v%u size=%zu group=%u\n",
-                     reg,
-                     data.size(),
+          writeDebug("notify: vreg v%u size=%zu group=%u\n", reg, data.size(),
                      group);
           Config.VRegUpdateCallback(Config.CallbackHandler,
-                                    static_cast<RVMVReg>(reg),
-                                    data.data(),
+                                    static_cast<RVMVReg>(reg), data.data(),
                                     data.size());
         }
       }
@@ -653,8 +653,7 @@ RVMSimExecStatus Model<URV>::executeInstr() {
           throw std::runtime_error("This CSR does not exist");
 
         const auto csrNumber = static_cast<unsigned>(csr);
-        writeDebug("notify: csr 0x%03x=0x%016llx\n",
-                   csrNumber,
+        writeDebug("notify: csr 0x%03x=0x%016llx\n", csrNumber,
                    static_cast<unsigned long long>(value));
         Config.CSRUpdateCallback(Config.CallbackHandler,
                                  static_cast<RVMCSR>(csrNumber),
@@ -673,7 +672,8 @@ RVMSimExecStatus Model<URV>::executeInstr() {
 }
 
 template <typename URV>
-RVMErrorCode Model<URV>::readMem(uint64_t addr, size_t count, char *data) const {
+RVMErrorCode Model<URV>::readMem(uint64_t addr, size_t count,
+                                 char *data) const {
   if (!data && count != 0) {
     setErrorContext("readMem: Data is null for addr=0x%016llx size=%zu",
                     static_cast<unsigned long long>(addr), count);
@@ -695,7 +695,8 @@ RVMErrorCode Model<URV>::readMem(uint64_t addr, size_t count, char *data) const 
 }
 
 template <typename URV>
-RVMErrorCode Model<URV>::writeMem(uint64_t addr, size_t count, const char *data) {
+RVMErrorCode Model<URV>::writeMem(uint64_t addr, size_t count,
+                                  const char *data) {
   if (!data && count != 0) {
     setErrorContext("writeMem: Data is null for addr=0x%016llx size=%zu",
                     static_cast<unsigned long long>(addr), count);
@@ -718,13 +719,11 @@ RVMErrorCode Model<URV>::writeMem(uint64_t addr, size_t count, const char *data)
   return RVM_ERRC_SUCCESS;
 }
 
-template <typename URV>
-uint64_t Model<URV>::readPC() const {
+template <typename URV> uint64_t Model<URV>::readPC() const {
   return Hart->pc();
 }
 
-template <typename URV>
-RVMErrorCode Model<URV>::setPC(uint64_t pc) {
+template <typename URV> RVMErrorCode Model<URV>::setPC(uint64_t pc) {
   if constexpr (sizeof(URV) == 4) {
     if (pc >> 32) {
       setErrorContext("setPC: value 0x%016llx is out of RV32 range",
@@ -748,13 +747,15 @@ RVMErrorCode Model<URV>::readXReg(RVMXReg reg, RVMRegT *value) const {
     return RVM_ERRC_INVALID_ARGUMENT;
   }
   if (static_cast<unsigned>(reg) >= 32) {
-    setErrorContext("readXReg: invalid register index %u", static_cast<unsigned>(reg));
+    setErrorContext("readXReg: invalid register index %u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
 
   URV v = 0;
   if (!Hart->peekIntReg(static_cast<unsigned>(reg), v)) {
-    setErrorContext("readXReg: Whisper failed to read x%u", static_cast<unsigned>(reg));
+    setErrorContext("readXReg: Whisper failed to read x%u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
   *value = static_cast<RVMRegT>(v);
@@ -765,7 +766,8 @@ RVMErrorCode Model<URV>::readXReg(RVMXReg reg, RVMRegT *value) const {
 template <typename URV>
 RVMErrorCode Model<URV>::setXReg(RVMXReg reg, RVMRegT value) {
   if (static_cast<unsigned>(reg) >= 32) {
-    setErrorContext("setXReg: invalid register index %u", static_cast<unsigned>(reg));
+    setErrorContext("setXReg: invalid register index %u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
   if constexpr (sizeof(URV) == 4) {
@@ -792,13 +794,15 @@ RVMErrorCode Model<URV>::readFReg(RVMFReg reg, RVMRegT *value) const {
     return RVM_ERRC_INVALID_ARGUMENT;
   }
   if (static_cast<unsigned>(reg) >= 32) {
-    setErrorContext("readFReg: invalid register index %u", static_cast<unsigned>(reg));
+    setErrorContext("readFReg: invalid register index %u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
 
   uint64_t v = 0;
   if (!Hart->peekFpReg(static_cast<unsigned>(reg), v)) {
-    setErrorContext("readFReg: Whisper failed to read f%u", static_cast<unsigned>(reg));
+    setErrorContext("readFReg: Whisper failed to read f%u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
   *value = static_cast<RVMRegT>(v);
@@ -809,11 +813,13 @@ RVMErrorCode Model<URV>::readFReg(RVMFReg reg, RVMRegT *value) const {
 template <typename URV>
 RVMErrorCode Model<URV>::setFReg(RVMFReg reg, RVMRegT value) {
   if (static_cast<unsigned>(reg) >= 32) {
-    setErrorContext("setFReg: invalid register index %u", static_cast<unsigned>(reg));
+    setErrorContext("setFReg: invalid register index %u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
   if (!Hart->pokeFpReg(static_cast<unsigned>(reg), value)) {
-    setErrorContext("setFReg: Whisper failed to write f%u", static_cast<unsigned>(reg));
+    setErrorContext("setFReg: Whisper failed to write f%u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
   clearErrorContext();
@@ -841,8 +847,9 @@ template <typename URV>
 RVMErrorCode Model<URV>::setCSR(unsigned csr, RVMRegT value) {
   if constexpr (sizeof(URV) == 4) {
     if (value >> 32) {
-      setErrorContext("setCSR: value 0x%016llx for csr=0x%03x is out of RV32 range",
-                      static_cast<unsigned long long>(value), csr);
+      setErrorContext(
+          "setCSR: value 0x%016llx for csr=0x%03x is out of RV32 range",
+          static_cast<unsigned long long>(value), csr);
       return RVM_ERRC_VALUE_OUT_OF_RANGE;
     }
   }
@@ -857,19 +864,22 @@ RVMErrorCode Model<URV>::setCSR(unsigned csr, RVMRegT value) {
 }
 
 template <typename URV>
-RVMErrorCode Model<URV>::readVReg(RVMVReg reg, char *data, size_t *maxSize) const {
+RVMErrorCode Model<URV>::readVReg(RVMVReg reg, char *data,
+                                  size_t *maxSize) const {
   if (!maxSize) {
     setErrorContext("readVReg: MaxSize is null");
     return RVM_ERRC_INVALID_ARGUMENT;
   }
   if (static_cast<unsigned>(reg) >= 32) {
-    setErrorContext("readVReg: invalid register index %u", static_cast<unsigned>(reg));
+    setErrorContext("readVReg: invalid register index %u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
 
   std::vector<uint8_t> bytes;
   if (!Hart->peekVecRegLsb(static_cast<unsigned>(reg), bytes)) {
-    setErrorContext("readVReg: Whisper failed to read v%u", static_cast<unsigned>(reg));
+    setErrorContext("readVReg: Whisper failed to read v%u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
 
@@ -888,18 +898,21 @@ RVMErrorCode Model<URV>::readVReg(RVMVReg reg, char *data, size_t *maxSize) cons
 }
 
 template <typename URV>
-RVMErrorCode Model<URV>::setVReg(RVMVReg reg, const char *data, size_t *dataSize) {
+RVMErrorCode Model<URV>::setVReg(RVMVReg reg, const char *data,
+                                 size_t *dataSize) {
   if (!dataSize) {
     setErrorContext("setVReg: DataSize is null");
     return RVM_ERRC_INVALID_ARGUMENT;
   }
   if (!data) {
-    *dataSize = Hart->vecRegSize() ? Hart->vecRegSize() : static_cast<size_t>(Config.VLEN / 8);
+    *dataSize = Hart->vecRegSize() ? Hart->vecRegSize()
+                                   : static_cast<size_t>(Config.VLEN / 8);
     setErrorContext("setVReg: Data is null");
     return RVM_ERRC_INVALID_ARGUMENT;
   }
   if (static_cast<unsigned>(reg) >= 32) {
-    setErrorContext("setVReg: invalid register index %u", static_cast<unsigned>(reg));
+    setErrorContext("setVReg: invalid register index %u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
 
@@ -907,7 +920,8 @@ RVMErrorCode Model<URV>::setVReg(RVMVReg reg, const char *data, size_t *dataSize
   std::memcpy(bytes.data(), data, *dataSize);
 
   if (!Hart->pokeVecRegLsb(static_cast<unsigned>(reg), bytes)) {
-    setErrorContext("setVReg: Whisper failed to write v%u", static_cast<unsigned>(reg));
+    setErrorContext("setVReg: Whisper failed to write v%u",
+                    static_cast<unsigned>(reg));
     return RVM_ERRC_IDX_OUT_OF_RANGE;
   }
 
@@ -915,8 +929,7 @@ RVMErrorCode Model<URV>::setVReg(RVMVReg reg, const char *data, size_t *dataSize
   return RVM_ERRC_SUCCESS;
 }
 
-template <typename URV>
-RVMErrorCode Model<URV>::raiseInterrupt(RVMRegT value) {
+template <typename URV> RVMErrorCode Model<URV>::raiseInterrupt(RVMRegT value) {
 #if 1
   writeDebug("raiseInterrupt: value=0x%016llx ignored by MVP adapter\n",
              static_cast<unsigned long long>(value));
@@ -926,8 +939,7 @@ RVMErrorCode Model<URV>::raiseInterrupt(RVMRegT value) {
   return RVM_ERRC_SUCCESS;
 }
 
-template <typename URV>
-RVMErrorCode Model<URV>::clearInterrupt(RVMRegT value) {
+template <typename URV> RVMErrorCode Model<URV>::clearInterrupt(RVMRegT value) {
 #if 1
   writeDebug("clearInterrupt: value=0x%016llx ignored by MVP adapter\n",
              static_cast<unsigned long long>(value));
@@ -937,8 +949,7 @@ RVMErrorCode Model<URV>::clearInterrupt(RVMRegT value) {
   return RVM_ERRC_SUCCESS;
 }
 
-template <typename URV>
-void Model<URV>::logMessage(const char *message) const {
+template <typename URV> void Model<URV>::logMessage(const char *message) const {
   if (!message)
     return;
 
@@ -950,8 +961,7 @@ void Model<URV>::logMessage(const char *message) const {
   }
 }
 
-template <typename URV>
-void Model<URV>::invokePCUpdate(uint64_t pc) {
+template <typename URV> void Model<URV>::invokePCUpdate(uint64_t pc) {
   if (Config.PCUpdateCallback && Config.CallbackHandler)
     Config.PCUpdateCallback(Config.CallbackHandler, pc);
 }
@@ -959,23 +969,19 @@ void Model<URV>::invokePCUpdate(uint64_t pc) {
 template <typename URV>
 void Model<URV>::invokeXRegUpdate(unsigned reg, URV value) {
   if (Config.XRegUpdateCallback && Config.CallbackHandler)
-    Config.XRegUpdateCallback(Config.CallbackHandler,
-                              static_cast<RVMXReg>(reg),
+    Config.XRegUpdateCallback(Config.CallbackHandler, static_cast<RVMXReg>(reg),
                               static_cast<RVMRegT>(value));
 }
 
 template <typename URV>
-void Model<URV>::invokeMemRead(uint64_t addr,
-                               const char *data,
+void Model<URV>::invokeMemRead(uint64_t addr, const char *data,
                                size_t size) const {
   if (Config.MemReadCallback && Config.CallbackHandler)
     Config.MemReadCallback(Config.CallbackHandler, addr, data, size);
 }
 
 template <typename URV>
-void Model<URV>::invokeMemUpdate(uint64_t addr,
-                                 const char *data,
-                                 size_t size) {
+void Model<URV>::invokeMemUpdate(uint64_t addr, const char *data, size_t size) {
   if (Config.MemUpdateCallback && Config.CallbackHandler)
     Config.MemUpdateCallback(Config.CallbackHandler, addr, data, size);
 }
