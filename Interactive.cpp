@@ -836,11 +836,23 @@ Interactive<URV>::pokeCommand(Hart<URV>& hart, const std::string& line,
   if (tokens.size() < 3)
     {
       cerr << "Error: Invalid poke command: " << line << '\n';
-      cerr << "Error:   Expecting: poke pc <value>\n";
-      cerr << "Error:     or       poke <resource> <address> <value>\n";
-      cerr << "Error:     or       poke c <address> <value> <virt>\n";
-      cerr << "Error:     or       poke t <number> <value1> <value2> <value3>\n";
-      cerr << "Error:   where <resource> is one of r, f, c, t, pc or m\n";
+      cerr << "       Expecting one of\n";
+      cerr << "         poke pc <value>\n";
+      cerr << "         poke t <number> <value1> <value2> <value3>\n";
+      cerr << "         poke m <addr> <value> [<size> <cache> <skip-mem>]\n";
+      cerr << "         poke s <special-resource> <value>\n";
+      cerr << "         poke <resource> <address> <value>\n";
+      cerr << "       <resource> is one of r, f, v, or c\n";
+      cerr << "         r: integer register\n";
+      cerr << "         f: FP register\n";
+      cerr << "         v: vector register\n";
+      cerr << "         c: CSR register\n";
+      cerr << "       <special> is one of defi, defnmi, seipin\n";
+      cerr << "         defi: deferred interrupts\n";
+      cerr << "         defnmi: deferred nmi interrupts\n";
+      cerr << "         seipin: supervisor external interrupt pin\n";
+      cerr << "         amoinio: amo in io regions\n";
+      cerr << "         amoinnc: amo in non-cachable regions\n";
       return false;
     }
 
@@ -1072,6 +1084,30 @@ Interactive<URV>::pokeCommand(Hart<URV>& hart, const std::string& line,
 	  if (not parseCmdLineNumber("value1", tokens.at(3), val))
 	    return false;
 	  hart.setSeiPin(val);
+	}
+      else if (addrStr == "amoinio")
+	{
+	  if (not parseCmdLineNumber("value1", tokens.at(3), val))
+	    return false;
+	  hart.allowAmoInIo(val);
+	}
+      else if (addrStr == "amoinnc")
+	{
+	  if (not parseCmdLineNumber("value1", tokens.at(3), val))
+	    return false;
+	  hart.allowAmoInNonCachable(val);
+	}
+      else if (addrStr == "rsrvinio")
+	{
+	  if (not parseCmdLineNumber("value1", tokens.at(3), val))
+	    return false;
+	  hart.allowRsrvInIo(val);
+	}
+      else if (addrStr == "rsrvinnc")
+	{
+	  if (not parseCmdLineNumber("value1", tokens.at(3), val))
+	    return false;
+	  hart.allowRsrvInNonCacheable(val);
 	}
       return true;
     }

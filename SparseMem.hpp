@@ -34,6 +34,9 @@ namespace WdRiscv
   {
   public:
 
+    /// Memory initialization mode.
+    enum InitMode { Zero, Salt, Addr };
+
     SparseMem() : pageMapCache_(cacheSize_) {}
 
     ~SparseMem();
@@ -58,9 +61,18 @@ namespace WdRiscv
     /// used memory areas (pages) sorted in ascending order.
     void getUsedBlocks(std::vector<std::pair<uint64_t, uint64_t>>& vec) const;
 
-    /// Initialize page at the given address with the contents of given buffer. Buffer
-    /// size must be greater than or equal to the page size.
-    bool initializePage(uint64_t addr, std::span<uint8_t> buffer);
+    /// Fill the page cotnaining the given address with the contents of the given
+    /// buffer. Buffer size must be >= pageSize_.
+    bool fillPage(uint64_t addr, std::span<uint8_t> buffer);
+
+    /// Set the memory initialization mode. When a new page is allocated, it is
+    /// initialized according to the mode (default is intialize with all zero).
+    void setInitMode(InitMode mode)
+    { initMode_ = mode; }
+
+    /// Set the salt for the Salt initialization mode.
+    void setInitSalt(uint64_t salt)
+    { initSalt_ = salt; }
 
   protected:
 
@@ -113,19 +125,24 @@ namespace WdRiscv
       }
 
       mapSpinLock_.lock();
+
       auto end = pageMap_.end();
       auto iter = pageMap_.find(pageNum);
       if (iter != end) {
         p = &iter->second;
       } else {
-        p = &createPage(pageNum);;
+        p = &createPage(pageNum);
+        initPage(pageNum, *p);
       }
+
       mapSpinLock_.unlock();
 
       entry.update(pageNum, *p);
 
       return *p;
     }
+
+    void initPage(uint64_t pageNum, std::vector<uint8_t>& page);
 
   private:
 
@@ -168,7 +185,7 @@ namespace WdRiscv
 
     std::vector<uint8_t>& createPage(uint64_t pageNum)
     {
-	  auto iter = pageMap_.try_emplace(pageNum, pageSize_, 0).first;
+      auto iter = pageMap_.try_emplace(pageNum, pageSize_, 0).first;
       auto& page = iter->second;
       return page;
     }
@@ -181,5 +198,8 @@ namespace WdRiscv
     std::unordered_map<uint64_t, std::vector<uint8_t>> pageMap_;  // Map address to page
     SpinLock mapSpinLock_;
     PageMapCache pageMapCache_;
+
+    InitMode initMode_ = InitMode::Zero;
+    uint64_t initSalt_ = 0;   // For InitMode::Salt.
   };
 }

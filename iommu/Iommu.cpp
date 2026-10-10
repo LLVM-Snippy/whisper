@@ -1636,7 +1636,7 @@ Iommu::translate(const IommuRequest& req, uint64_t& pa, unsigned& cause,
         cause = 5; // load access fault
       else if (req.isWrite() and not (isPmpWritable(pa) and isPmaWritable(pa)))
         cause = 7; // store/amo access fault
-      if (cause == 0)
+      else
         return true;
       if (pbmtInfo and not pbmtInfo->empty())
         pbmtInfo->pop_back();  // Pmp/pma fail: remove SPA entry as requested by DV.
@@ -2175,7 +2175,7 @@ Iommu::getStage2Pbmt(std::vector<PbmtInfo>* pbmtInfo)
   // The last walk is the GPA to SPA walk which is what we want. We need to merge its pbmt
   // with that of stage1. Pbmt of stage1 takes priority.
   const auto& walk = walks.back();
-  unsigned s2pbmt = unsigned(walk.pbmt());
+  auto s2pbmt = unsigned(walk.pbmt());
 
   // The stage1 translate should have put a pbmt-info entry at end of the pbmtInfo vector
   // corresponding to the stage1 explicit translation pbmt.

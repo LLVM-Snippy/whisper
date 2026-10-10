@@ -413,6 +413,21 @@ namespace WdRiscv
     bool isMaskAgnosticOnes() const
     { return maskAgnOnes_; }
 
+    /// Set mask-agnostic to the given flag.
+    void setMaskAgnostic(bool flag)
+    { maskAgn_ = flag; }
+
+    /// Return true if the vector register group starting at v1 with group multiplier
+    /// g1x8 (times 8) overlaps the group starting at v2 with group multiplier g2x8.
+    /// Fractional groups are treated as a single register.
+    static bool groupsOverlap(unsigned v1, unsigned g1x8, unsigned v2, unsigned g2x8)
+    {
+      unsigned g1 = g1x8 >= 8 ? g1x8 / 8 : 1;
+      unsigned g2 = g2x8 >= 8 ? g2x8 / 8 : 1;
+
+      return (v1 < v2 + g2 and v2 < v1 + g1);
+    }
+
     /// Return true if mask-producing instructions should update the whole destination
     /// register.
     bool updateWholeMask() const
@@ -433,6 +448,14 @@ namespace WdRiscv
     /// register elements when tail-agnostic is on. Otherwise, preserve tail elements.
     void configTailAgnosticAllOnes(bool flag)
     { tailAgnOnes_ = flag; }
+
+    /// When flag=true, instructions with destination/source overlap and differing element
+    /// widths will execute with mask agnostic and tail agnostic policies regardless of
+    /// VTYPE as recommended by the spec. When flag=false, such instructions will follow
+    /// the mask/tail policy of VTYPE which is legal since a policy of preserve is
+    /// compatible with a policy of agnostic.
+    void configAgnosticOverrideForOverlap(bool flag)
+    { agnOverride_ = flag; }
 
     /// If flag is false then vector segment load will not commit any of the fields
     /// at a given index if any of those fields encouters an exception. Otherwise, the
@@ -636,6 +659,41 @@ namespace WdRiscv
     /// floating point operations.
     void setAltfmt(bool flag)
     { altfmt_ = flag; }
+
+    /// Return true if agnostic override is on (see configAgnosticOverrideForOverlap.
+    bool agnosticOverride() const
+    { return agnOverride_; }
+
+    /// Scoped override of the tail/mask agnostic policy: If force is true, make the
+    /// policy tail-agnostic and mask-agnostic for the lifetime of this object. The
+    /// original policy is restored on destruction.
+    class ForceAgnostic
+    {
+    public:
+      ForceAgnostic(VecRegs& regs, bool force)
+        : regs_(regs), prevTa_(regs.isTailAgnostic()), prevMa_(regs.isMaskAgnostic())
+      {
+        if (force)
+          {
+            regs_.setTailAgnostic(true);
+            regs_.setMaskAgnostic(true);
+          }
+      }
+
+      ~ForceAgnostic()
+      {
+        regs_.setTailAgnostic(prevTa_);
+        regs_.setMaskAgnostic(prevMa_);
+      }
+
+      ForceAgnostic(const ForceAgnostic&) = delete;
+      ForceAgnostic& operator=(const ForceAgnostic&) = delete;
+
+    private:
+      VecRegs& regs_;
+      bool prevTa_ = false;
+      bool prevMa_ = false;
+    };
 
   protected:
 
@@ -966,7 +1024,8 @@ namespace WdRiscv
     bool partialSegLoad_ = false;
     bool partialSegStore_ = false;
     bool vmvrIgnoreVill_ = false;   // If true, allow vmv*r.v instructions to execute when vill is set.
-    bool altfmt_ = false;  // If true use BFloat16 instead of Float16 for half-precision.
+    bool altfmt_ = false;           // If true use BFloat16 instead of Float16 for half-precision.
+    bool agnOverride_ = true;       // If true override VTYPE agnostic bits for dest-source overlap.
 
     uint32_t groupX8_ = 8;    // Group multiplier as a number scaled by 8.
     uint32_t sewInBits_ = 8;  // SEW expressed in bits (Byte corresponds to 8).

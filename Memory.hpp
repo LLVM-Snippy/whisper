@@ -290,10 +290,10 @@ namespace WdRiscv
     void defineWriteMemoryCallback(std::function<bool(uint64_t, unsigned, uint64_t)> callback)
     { writeCallback_ = std::move(callback); }
 
-    /// Define page initialization callback. This is used to speed-up memory insitialization
-    /// for the sparse-memory mode..
-    void defineInitPageCallback(std::function<bool(uint64_t, const std::span<uint8_t>)> callback)
-    { initPageCallback_ = std::move(callback); }
+    /// Define page fill callback. This is used to speed-up memory filling
+    /// for the sparse-memory mode.
+    void defineFillPageCallback(std::function<bool(uint64_t, const std::span<uint8_t>)> callback)
+    { fillPageCallback_ = std::move(callback); }
 
     /// Enable tracing of memory data lines referenced by current run. A memory data line
     /// is typically 64-bytes long and corresponds to a cachable line.
@@ -413,16 +413,18 @@ namespace WdRiscv
     /// and external memory are written.
     bool initializeByte(uint64_t address, uint8_t value);
 
-    /// Write given buffer to the page at the given address. Buffer size
-    /// must be >= pageSize_.
-    bool initializePage(uint64_t addr, std::span<uint8_t> buffer);
+    /// Fill the page cotnaining the given address with the contents of the given
+    /// buffer. Buffer size must be >= pageSize_.
+    bool fillPage(uint64_t addr, std::span<uint8_t> buffer);
 
     /// Reset (to zero) all memory mapped registers.
     void resetMemoryMappedRegisters();
 
+#if 0
     /// Read a memory mapped register word.
     bool readRegister(uint64_t addr, auto& value) const
     { return pmaMgr_.readRegister(addr, value); }
+#endif
 
     /// Return memory mapped mask associated with the word containing
     /// the given address. Return all 1 if given address is not a
@@ -644,7 +646,7 @@ namespace WdRiscv
     std::function<bool(uint64_t, unsigned, uint64_t)> writeCallback_ = nullptr;
 
     /// Callback to initialize a page of memory.
-    std::function<bool(uint64_t, const std::span<uint8_t>)> initPageCallback_ = nullptr;
+    std::function<bool(uint64_t, const std::span<uint8_t>)> fillPageCallback_ = nullptr;
 
     /// Load a file into the given vector. Throw an exception if file cannot be opened.
     static void loadFile(const std::string& filename, std::vector<uint8_t>& data);

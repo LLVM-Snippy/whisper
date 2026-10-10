@@ -52,6 +52,16 @@ static
 void
 printLdSt(const Disassembler& disas, std::ostream& stream, const DecodedInst& di)
 {
+  if (di.extension() == RvExtension::Zilx)
+    {
+      // Zilx: mnemonic rd, (rs2), rs1
+      stream << std::left << std::setw(8) << di.name() << ' '
+             << disas.intRegName(di.op0()) << ", ("
+             << disas.intRegName(di.op2()) << "), "
+             << disas.intRegName(di.op1());
+      return;
+    }
+
   unsigned rd = di.op0(), rs1 = di.op1();
   auto imm = di.op2As<int32_t>();
 

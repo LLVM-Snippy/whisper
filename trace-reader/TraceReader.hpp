@@ -31,6 +31,7 @@ namespace WhisperUtil  {
     unsigned emul = 1;                    // Effective group multiplier for vector register.
     uint64_t value = 0;
     uint64_t prevValue = 0;               // Used for modified registers.
+    bool identityOnly = false;            // Operand carries only and identity and no value.  Used for indirect register reads.
     std::vector<uint8_t> vecValue;        // Used for vector registers
     std::vector<uint8_t> vecPrevValue;    // Used for modified vector registers
 
@@ -38,7 +39,8 @@ namespace WhisperUtil  {
       if (this->type != rhs.type) return false;
       if (this->number != rhs.number) return false;
       if (this->emul != rhs.emul) return false;
-      if (number != 256)
+      if (this->identityOnly != rhs.identityOnly) return false;
+      if (number != 256 and not this->identityOnly)
         if (this->value != rhs.value) return false;
 
       return true;
@@ -48,7 +50,8 @@ namespace WhisperUtil  {
       if (this->type != rhs.type) return true;
       if (this->number != rhs.number) return true;
       if (this->emul != rhs.emul) return true;
-      if (number != 256)
+      if (this->identityOnly != rhs.identityOnly) return true;
+      if (number != 256 and not this->identityOnly)
         if (this->value != rhs.value) return true;
 
       return false;
@@ -492,6 +495,10 @@ namespace WhisperUtil  {
 			    const char* pairString,
 			    uint64_t& virt, uint64_t& phys,
 			    bool& masked);
+
+    // Parse an indirect regsister read into the given operand. Return false if
+    // `regName` failse to parse, true otherwise
+    bool parseIndirectRegRead(uint64_t lineNum, char* regName, Operand& operand);
 
     // Parse the register value in the given value string into the given
     // operand.  Return true on success and false on failure. Update the

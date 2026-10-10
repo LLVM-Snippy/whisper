@@ -70,7 +70,7 @@ namespace WdRiscv
 
     /// Apply the memory configuration in this object. Helper to configMemory.
     template<typename URV>
-    bool applyMemoryConfig(Hart<URV>&) const;
+    bool applyMemoryConfig(System<URV>&, Hart<URV>&) const;
 
     /// Confgure a core-local-interrupt (CLINT) device in the given
     /// address range: clintStart to  clintEnd - 1. If siOnReset

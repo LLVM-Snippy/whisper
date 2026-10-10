@@ -1071,24 +1071,8 @@ namespace WdRiscv
               csr->setReadMask(threshMask);
             }
         }
-      // Enable bit 53 (ACLIC) in mstateen0/hstateen0 write mask per ACLIC spec.
-      // This is done here rather than in addMachineFields() so the bit is only
-      // writable when ACLIC is actually implemented.  The existing addMachineFields()
-      // code enables stateen bits unconditionally (e.g. bit 58/IMSIC without checking
-      // for IMSIC), which is incorrect; that will be fixed separately.
-      if constexpr (sizeof(URV) == 8)
-        {
-          URV aclicBit = URV(1) << 53;
-          for (auto csrn : { CsrNumber::MSTATEEN0, CsrNumber::HSTATEEN0 })
-            {
-              auto csr = findCsr(csrn);
-              if (csr)
-                {
-                  csr->setWriteMask(csr->getWriteMask() | aclicBit);
-                  csr->setPokeMask(csr->getPokeMask() | aclicBit);
-                }
-            }
-        }
+      // Make bit 53 (ACLIC) of mstateen0/hstateen0 writable per ACLIC spec.
+      updateStateenMasks();
     }
 
     /// Return true if the given CSR number corresponds to a custom CSR (See table 3 of
@@ -2078,7 +2062,14 @@ namespace WdRiscv
     /// Set the max number of guest interrupt count. This should be
     /// done before hypervisor mode is enable.
     void setGuestInterruptCount(unsigned value)
-    { geilen_ = value; }
+    { geilen_ = value; updateGuestInterruptMasks(); }
+
+    /// Return the guest interrupt count (GEILEN).
+    unsigned guestInterruptCount() const
+    { return geilen_; }
+
+    /// Make bits GEILEN:1 of HGEIE and HGEIP writable and the others read-only zero.
+    void updateGuestInterruptMasks();
 
     /// Enable/disable user mode.
     void enableUserMode(bool flag)
@@ -2179,6 +2170,10 @@ namespace WdRiscv
 
     /// Enable/disable access to certain CSRs from non-machine mode.
     void enableSmstateen(bool flag);
+
+    /// Make the bits of MSTATEEN0/HSTATEEN0 that control the state of other
+    /// extensions writable if and only if that state is implemented.
+    void updateStateenMasks();
 
     /// Enable/disable Ssqosid extension.
     void enableSsqosid(bool flag);
@@ -2676,7 +2671,7 @@ namespace WdRiscv
     {
       auto csr = getImplementedCsr(CsrNumber::MENVCFG);
       if (not csr)
-        return 0;
+        return false;
       URV value = csr->read();
       MenvcfgFields<uint64_t> fields(value);
       return fields.bits_.SSE;
@@ -2688,7 +2683,7 @@ namespace WdRiscv
     {
       auto csr = getImplementedCsr(CsrNumber::SENVCFG);
       if (not csr)
-        return 0;
+        return false;
       URV value = csr->read();
       SenvcfgFields<uint64_t> fields(value);
       return fields.bits_.SSE;
@@ -2700,7 +2695,7 @@ namespace WdRiscv
     {
       auto csr = getImplementedCsr(CsrNumber::HENVCFG);
       if (not csr)
-        return 0;
+        return false;
       URV value = csr->read();
       HenvcfgFields<uint64_t> fields(value);
       return fields.bits_.SSE;

@@ -95,6 +95,7 @@ namespace WdRiscv
     Zibi,
     Zabha,
     Zalasr,
+    Zilx,
     Svvptc,
     Zilsd,
     Zclsd,

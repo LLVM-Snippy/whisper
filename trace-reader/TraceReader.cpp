@@ -456,6 +456,26 @@ TraceReader::extractAddressPair(uint64_t lineNum, const char* tag,
 
 
 bool
+TraceReader::parseIndirectRegRead(uint64_t lineNum, char* regName, Operand& operand)
+{
+  if (strlen(regName) < 2 or not std::isxdigit(static_cast<unsigned char>(regName[1])))
+    {
+      std::cerr << "Error: Line " << lineNum << ": Bad indirect register identity: "
+                << regName << ", expecting: n<select>\n";
+      return false;
+    }
+  char* tail = nullptr;
+  operand.number = std::strtoul(regName + 1, &tail, 16);
+  operand.type = OperandType::IndirectCsr;
+  operand.identityOnly = true;
+
+  auto it = indirectCsrs_.find(operand.number);
+  operand.value = it == indirectCsrs_.end() ? 0 : it->second;
+  return true;
+}
+
+
+bool
 TraceReader::parseRegValue(uint64_t lineNum, char* regName,
 			   char* valStr, Operand& operand)
 {
@@ -873,6 +893,16 @@ TraceReader::parseLine(std::string& line, uint64_t lineNum, TraceRecord& record)
 		{
 		  char* rms = source + 3;
 		  record.roundingMode = hexStrToNum(rms);
+		  continue;
+		}
+	      // An indirect-window read is printed in the source operands
+              // as 'n<select>' with no value
+              if (source[0] == 'n')
+		{
+		  Operand operand;
+		  if (not parseIndirectRegRead(lineNum, source, operand))
+		    return false;
+		  record.sourceOperands.push_back(operand);
 		  continue;
 		}
 	      Operand operand;

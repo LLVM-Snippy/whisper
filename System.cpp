@@ -92,12 +92,12 @@ System<URV>::System(unsigned coreCount, unsigned hartsPerCore,
   auto writef = [this](uint64_t addr, unsigned size, uint64_t value) -> bool {
                   return sparseMem_->write(addr, size, value); };
 
-  auto initf = [this](uint64_t addr, const std::span<uint8_t> buffer) -> bool {
-                 return sparseMem_->initializePage(addr, buffer); };
+  auto fillf = [this](uint64_t addr, const std::span<uint8_t> buffer) -> bool {
+                  return sparseMem_->fillPage(addr, buffer); };
 
   mem.defineReadMemoryCallback(readf);
   mem.defineWriteMemoryCallback(writef);
-  mem.defineInitPageCallback(initf);
+  mem.defineFillPageCallback(fillf);
 #endif
 }
 
@@ -861,6 +861,11 @@ System<URV>::configImsic(uint64_t mbase, uint64_t mstride,
   bool ok = imsicMgr_.configureMachine(mbase, mstride, idsVec.at(0), tmVec.at(0), maplic);
   ok = imsicMgr_.configureSupervisor(sbase, sstride, idsVec.at(1), tmVec.at(1), saplic) and ok;
   ok = imsicMgr_.configureGuests(guests, idsVec.at(2), tmVec.at(2)) and ok;
+
+  // Unless guest_interrupt_count sets it, a hart's GEILEN is its number of guest interrupt files.
+  for (auto& hart : sysHarts_)
+    if (hart->guestInterruptCount() == 0)
+      hart->configGuestInterruptCount(guests);
   if (not ok)
     {
       cerr << "Error: Failed to configure IMSIC.\n";
