@@ -778,6 +778,14 @@ namespace WdRiscv
     void configTailAgnosticAllOnes(bool flag)
     { vecRegs_.configTailAgnosticAllOnes(flag); }
 
+    /// When flag=true, instructions with destination/source overlap and differing element
+    /// widths will execute with mask agnostic and tail agnostic policies regardless of
+    /// VTYPE as recommended by the spec. When flag=false, such instructions will follow
+    /// the mask/tail policy of VTYPE which is legal since a policy of preserve is
+    /// compatible with a policy of agnostic.
+    void configAgnosticOverrideForOverlap(bool flag)
+    { vecRegs_.configAgnosticOverrideForOverlap(flag); }
+
     /// Configure partial vector load segment update. If flag is false, then none of a
     /// segment fields are committed if any field encounters an exception.
     void configVecPartialSegLoad(bool flag)
@@ -2102,6 +2110,10 @@ namespace WdRiscv
     bool isRvZalasr() const
     { return extensionIsEnabled(RvExtension::Zalasr); }
 
+    /// Return true if the Zilx extension (indexed integer loads) is enabled.
+    bool isRvZilx() const
+    { return extensionIsEnabled(RvExtension::Zilx); }
+
     /// Return true if the Zilsd extension (load store double in rv32) is enabled.
     bool isRvzilsd() const
     { return extensionIsEnabled(RvExtension::Zilsd); }
@@ -2278,10 +2290,22 @@ namespace WdRiscv
     /// Set the max number of guest external interrupts.
     bool configGuestInterruptCount(unsigned n);
 
-    /// Set timeout of wfi instruction. A non-zero timeout will make wfi succeed
-    /// if it can succeed within a bound timeout.
+    /// Return the guest interrupt count (GEILEN).
+    unsigned guestInterruptCount() const
+    { return csRegs_.guestInterruptCount(); }
+
+    /// Set the implementation-specific, bounded time limit for WFI (priv spec
+    /// mstatus.TW / hstatus.VTW / U-mode). WFI waits up to this many ticks for
+    /// an interrupt. If the bound expires (zero means no wait), WFI traps when
+    /// the spec requires a timeout.
     void setWfiTimeout(uint64_t t)
     { wfiTimeout_ = t; }
+
+    /// When false (default), a WFI whose stall bound expires retires
+    /// instead of taking an illegal-instruction or virtual-instruction
+    /// exception. Does not apply to VU-mode with TW=0, which always traps.
+    void setWfiStallException(bool flag)
+    { wfiStallException_ = flag; }
 
     /// Enable user mode.
     void enableUserMode(bool flag)
@@ -2594,12 +2618,42 @@ namespace WdRiscv
     { pmaMgr_.invalidateEntry(ix); }
 
     /// Allow/disallow non-cachable regions to have AMO.
-    void setAllowAmoInNonCachable(bool flag)
-    { pmaMgr_.setAllowAmoInNonCacheable(flag); }
+    void allowAmoInNonCachable(bool flag)
+    {
+      pmaMgr_.setAmoInNc(flag);
+      syncPmamgrToPmacfg();
+    }
 
     /// Allow/disallow IO regions to have AMO.
-    void setAllowAmoInIo(bool flag)
-    { pmaMgr_.setAllowAmoInIo(flag); }
+    void allowAmoInIo(bool flag)
+    {
+      pmaMgr_.setAmoInIo(flag);
+      syncPmamgrToPmacfg();
+    }
+
+    /// Allow/disallow IO regions to have LR/SC.
+    void allowRsrvInIo(bool flag)
+    {
+      pmaMgr_.setRsrvInIo(flag);
+      syncPmamgrToPmacfg();
+    }
+
+    /// Allow/disallow non-cacheable regions to have LR/SC.
+    void allowRsrvInNonCacheable(bool flag)
+    {
+      pmaMgr_.setRsrvInNc(flag);
+      syncPmamgrToPmacfg();
+    }
+
+    void setAllowAmoInNonCachable(bool flag)  // Backward compatible. 
+    { allowAmoInNonCachable(flag); } 
+
+    void setAllowAmoInIo(bool flag)  // Backwared compatible.
+    { allowAmoInIo(flag); }
+
+    /// Update the Pmamgr regions corresponding to the defined PMACFG CSRs.  This is done
+    /// whenever we change the configuration to allow/disallow AMOs in IO/NC regions.
+    void syncPmamgrToPmacfg();
 
     /// Called after a change to a PMACFG CSR to update PMA regions. Return true on
     /// success and false if num is not that of PMACFG CSR.
@@ -3202,16 +3256,20 @@ namespace WdRiscv
 
       if (pbmt == VirtMem::Pbmt::Nc)
         {
-          if (not pmaManager().allowAmoInNonCacheable())
+          if (not pmaManager().amoInNc())
             pma.disable(Pma::Attrib::Amo);
+          if (bbl_ and not pmaManager().rsrvInNc())
+            pma.disable(Pma::Attrib::Rsrv);
           pma.enable(Pma::Attrib::Idempotent);
           pma.disable(Pma::Attrib::Io);
           pma.enable(Pma::Attrib::MisalOk);
         }
       else
         {
-          if (not pmaManager().allowAmoInIo())
+          if (not pmaManager().amoInIo())
             pma.disable(Pma::Attrib::Amo);
+          if (bbl_ and not pmaManager().rsrvInIo())
+            pma.disable(Pma::Attrib::Rsrv);
           pma.disable(Pma::Attrib::Idempotent);
           pma.enable(Pma::Attrib::Io);
           pma.disable(Pma::Attrib::MisalOk);
@@ -3321,6 +3379,10 @@ namespace WdRiscv
       mcmOpcodes_[tag] = entry;
       return true;
     }
+
+    /// Set the default physical memory attributes.
+    void setDefaultPma(Pma pma)
+    { pmaMgr_.setDefaultPma(pma); }
 
     /// Temporary.
     void enableBabylonPma(bool flag)
@@ -3508,16 +3570,6 @@ namespace WdRiscv
       if (mstatusMprv() and not nmieOverridesMprv())
 	pm = mstatusMpp();
       return pm;
-    }
-
-    /// Return the effective virtual mode: if MSTATUS.MPRV is set then it is the virtual
-    /// mode in MSTATUS.MPV
-    bool effectiveVirtualMode() const
-    {
-      bool virt = virtMode_;
-      if (mstatusMprv() and not nmieOverridesMprv())
-	virt = mstatusMpp() == PrivilegeMode::Machine? false : mstatus_.bits_.MPV;
-      return virt;
     }
 
     /// Read an item that may span 2 physical pages. If pa1 is the
@@ -3981,11 +4033,11 @@ namespace WdRiscv
 
     /// Helper to load methods: Initiate an exception with the given
     /// cause and data address.
-    void initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2 = 0);
+    void initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2 = 0);
 
     /// Helper to store methods: Initiate an exception with the given
     /// cause and data address.
-    void initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2 = 0);
+    void initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2 = 0);
 
     /// Helper to lb, lh, lw and ld. Load type should be int_8, int16_t
     /// etc... for signed byte, halfword etc... and uint8_t, uint16_t
@@ -4128,7 +4180,7 @@ namespace WdRiscv
                                             isBreakpInterruptEnabled(), hitAddr);
       if (hit)
         {
-          triggerTripped_ = true;
+          triggerTripped_ = ldStTriggerTripped_ = true;
           ldStFaultAddr_ = addrTrigsReportEa_ ? addr : hitAddr;
         }
       return hit;
@@ -4144,7 +4196,7 @@ namespace WdRiscv
       bool hit = csRegs_.ldStDataTriggerHit(value, t, isLoad, privilegeMode(), virtMode(),
                                             isBreakpInterruptEnabled());
       if (hit)
-        triggerTripped_ = true;
+        triggerTripped_ = ldStTriggerTripped_ = true;
       return hit;
     }
 
@@ -4270,7 +4322,7 @@ namespace WdRiscv
 			FILE* out);
 
     /// Start a synchronous exceptions.
-    void initiateException(ExceptionCause cause, URV pc, URV info, URV info2 = 0,
+    void initiateException(ExceptionCause cause, URV pc, URV info, uint64_t info2 = 0,
 			   const DecodedInst* di = nullptr);
 
     /// Start an asynchronous exception (interrupt).
@@ -4322,7 +4374,7 @@ namespace WdRiscv
     /// information about an exception.
     void initiateTrap(const DecodedInst* di, bool interrupt, URV cause,
                       PrivilegeMode nextMode, bool nextVirt,
-                      URV pcToSave, URV info, URV info2 = 0);
+                      URV pcToSave, URV info, uint64_t info2 = 0);
 
     /// Helper to initiateTrap supporting ACLIC table vectored mode. Called when
     /// MTVEC/STVEC mode is table-vectored (3) to determine the interrupt handler PC.
@@ -4351,7 +4403,7 @@ namespace WdRiscv
 
     /// Create trap instruction information for mtinst/htinst.
     uint32_t createTrapInst(const DecodedInst* di, bool interrupt, unsigned cause,
-                            URV info, URV info2) const;
+                            URV info, uint64_t info2) const;
 
     /// Illegal instruction. Initiate an illegal instruction trap.
     /// This is used for one of the following:
@@ -6559,6 +6611,11 @@ namespace WdRiscv
     void execSw_rl(const DecodedInst*);
     void execSd_rl(const DecodedInst*);
 
+    // Zilx
+    template<typename LOAD_TYPE>
+    void execZilxLoad(const DecodedInst*, bool doScale, bool zextIndex); // Helper to execZilx.
+    void execZilx(const DecodedInst*);
+
     // Zimop
     void execMop_r(const DecodedInst*);
     void execMop_rr(const DecodedInst*);
@@ -6662,6 +6719,7 @@ namespace WdRiscv
     void resetExecInfo()
     {
       triggerTripped_ = enteredDebugMode_ = hasInterrupt_ = hasException_ = false;
+      ldStTriggerTripped_ = false;
       ebreakInstDebug_ = false;
       ldStSize_ = 0;
       lastPriv_ = privMode_;
@@ -6763,6 +6821,7 @@ namespace WdRiscv
     bool csrException_ = false;      // True if there is a CSR related exception.
     bool hasInterrupt_ = false;      // True if there is an interrupt.
     bool triggerTripped_ = false;    // True if a trigger trips.
+    bool ldStTriggerTripped_ = false; // True if a load/store trigger trips.
     bool icountTrig_ = false;        // True if icount trigger hit.
 
     bool lastBranchTaken_ = false; // Useful for performance counters
@@ -6937,7 +6996,8 @@ namespace WdRiscv
     uint64_t alarmLimit_ = ~uint64_t(0); // Timer interrupt when inst counter reaches this.
     uint64_t logStart_ = 0; // Start logging at this instruction rank.
 
-    uint64_t wfiTimeout_ = 1;  // If non-zero wfi will succeed.
+    uint64_t wfiTimeout_ = 1;  // Non-zero: implementation-specified WFI time limit.
+    bool wfiStallException_ = true;  // If false, an expired WFI stall does not trap.
 
     bool misalDataOk_ = true;
     bool misalHasPriority_ = true;

@@ -1202,6 +1202,27 @@ namespace WdRiscv
      // Zvfwbdota16bf
      vfwbdota_vv,
 
+     // Zilx (indexed integer loads)
+     lxh,
+     lxw,
+     lxd,
+     lxhu,
+     lxwu,
+     lxsb,
+     lxsh,
+     lxsw,
+     lxsd,
+     lxsbu,
+     lxshu,
+     lxswu,
+     lxsuwb,
+     lxsuwh,
+     lxsuww,
+     lxsuwd,
+     lxsuwbu,
+     lxsuwhu,
+     lxsuwwu,
+
      endId_   // Marker for iterating over IDs. Not a real ID.
     };
 }

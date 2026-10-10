@@ -574,6 +574,7 @@ namespace WdRiscv
 
     static bool isSsPage(bool r, bool w, bool x)
     { return not r and w and not x; }
+
     /// Return page based memory type of last translation, only applicable if translation
     /// was successful.
     Pbmt lastPbmt() const

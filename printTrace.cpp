@@ -1,6 +1,7 @@
 #include <cinttypes>
 #include <iostream>
 #include <iomanip>
+#include <optional>
 #include <ranges>
 #include <sstream>
 #include "Hart.hpp"
@@ -687,6 +688,43 @@ printIndirectRegChanges(Hart<URV>& hart, const DecodedInst& di,
 }
 
 
+// If the instruction reads an indirect register, and does not write it, return
+// the select value of the register that was accessed.  Return nullopt otherwise.
+template <typename URV>
+static std::optional<URV>
+indirectReadSelect(Hart<URV>& hart, const DecodedInst& di,
+                   const std::vector<CsrNumber>& csrns)
+{
+  if (not di.isCsr())
+    return std::nullopt;
+
+  using enum InstId;
+  auto id = di.instId();
+  bool diIsWrite = (id == csrrw or id == csrrwi) or di.op1() != 0;
+
+  // If the instruction is a CSR write, or if the CSR is already reported
+  // in the set of updated CSRs, return nullopt
+  if (diIsWrite)
+    return std::nullopt;
+
+  CsrNumber csrn = CsrNumber(di.op2());
+
+  for (auto csrUpdated : csrns)
+    if (csrUpdated == csrn)
+      return std::nullopt;
+
+  CsrNumber selCsr = CsrNumber::MISELECT;
+  if (isSiregCsr(csrn))
+    selCsr = CsrNumber::SISELECT;
+  else if (isVsiregCsr(csrn))
+    selCsr = CsrNumber::VSISELECT;
+  else if (not isMiregCsr(csrn))
+    return std::nullopt;
+
+  return hart.peekCsr(selCsr);
+}
+
+
 template <typename URV>
 void
 Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
@@ -830,6 +868,13 @@ Hart<URV>::printInstCsvTrace(const DecodedInst& di, FILE* out)
             buffer.print(sep).printChar('i').print(operand);
           sep = ";";
         }
+    }
+
+  // Display identity if indirectly-accessed registers on reads (prints n<select>).
+  if (auto sel = indirectReadSelect(*this, di, csrns))
+    {
+      buffer.print(sep).printChar('n').print(uint64_t(*sel));
+      sep = ";";
     }
 
   // Print rounding mode with source operands.

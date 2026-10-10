@@ -1936,7 +1936,7 @@ Decoder::expandCompressedInst(uint16_t inst) const
 	  if (not isRv64() and not isRvzclsd())
 	    {
 	      op1=8+cs.bits.rs1p; op0=8+cs.bits.rs2p; op2 = cs.swImmed();
-	      encodeFsw(op0, op1, op2, expanded);
+	      encodeFsw(op1, op0, op2, expanded);
 	      return expanded;
 	    }
 	  op1=8+cs.bits.rs1p; op0=8+cs.bits.rs2p; op2 = cs.sdImmed();
@@ -2294,12 +2294,10 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           return instTable_.getEntry(InstId::illegal);
 
         case 0b00010:       //   I-form
-          {
-            return instTable_.getEntry(InstId::illegal);
-          }
+          return instTable_.getEntry(InstId::illegal);  // Custom-0.
 
         case 0b00111:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal);  // Resrved.
 
         case 0b01001:
           {
@@ -2327,8 +2325,10 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
           return instTable_.getEntry(InstId::illegal);
 
         case 0b01010:      //  S-form
+          return instTable_.getEntry(InstId::illegal);  // Custom-1.
+
         case 0b01111:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal);  // Reserved.
 
         case 0b10000:
           {
@@ -2396,7 +2396,7 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
         case 0b10101:
           return decodeVec(inst, op0, op1, op2, op3);
 
-        case 0b10110:  //  R-form custom vector opcode.
+        case 0b10110:  //  R-form custom vector opcode. Custom-2.
 	  {
 	    RFormInst rform(inst);
             op0 = rform.bits.rd;
@@ -2407,15 +2407,19 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
 	  }
 
         case 0b10111:
+          return instTable_.getEntry(InstId::illegal); // Reserved.
+
         case 0b11010:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal); // Reserved.
 
         case 0b11101:
           return decodeVecCryptoOrDot(inst, op0, op1, op2);
 
         case 0b11110:
+          return instTable_.getEntry(InstId::illegal);  // Custom-3.
+
         case 0b11111:
-          return instTable_.getEntry(InstId::illegal);
+          return instTable_.getEntry(InstId::illegal);  // Reserved.
 
         case 0b00011: //  I-form
           {
@@ -2674,6 +2678,42 @@ Decoder::decode(uint32_t inst, uint32_t& op0, uint32_t& op1, uint32_t& op2,
                 if (f3 == 1) return instTable_.getEntry(InstId::sh_rl);
                 if (f3 == 2) return instTable_.getEntry(InstId::sw_rl);
                 if (f3 == 3) return instTable_.getEntry(InstId::sd_rl);
+              }
+
+            // Zilx: indexed integer loads. aq and rl must be 0.
+            // op0=rd, op1=rs1 (index), op2=rs2 (base).
+            if (((inst >> 25) & 3) == 0 and
+                (top5 == 0x12 or top5 == 0x1a or top5 == 0x1e))
+              {
+                if (top5 == 0x12)  // unscaled: byte forms reserved
+                  {
+                    if (f3 == 1) return instTable_.getEntry(InstId::lxh);
+                    if (f3 == 2) return instTable_.getEntry(InstId::lxw);
+                    if (f3 == 3 and isRv64()) return instTable_.getEntry(InstId::lxd);
+                    if (f3 == 5) return instTable_.getEntry(InstId::lxhu);
+                    if (f3 == 6 and isRv64()) return instTable_.getEntry(InstId::lxwu);
+                  }
+                else if (top5 == 0x1a)  // scaled
+                  {
+                    if (f3 == 0) return instTable_.getEntry(InstId::lxsb);
+                    if (f3 == 1) return instTable_.getEntry(InstId::lxsh);
+                    if (f3 == 2) return instTable_.getEntry(InstId::lxsw);
+                    if (f3 == 3 and isRv64()) return instTable_.getEntry(InstId::lxsd);
+                    if (f3 == 4) return instTable_.getEntry(InstId::lxsbu);
+                    if (f3 == 5) return instTable_.getEntry(InstId::lxshu);
+                    if (f3 == 6 and isRv64()) return instTable_.getEntry(InstId::lxswu);
+                  }
+                else if (isRv64())  // scaled unsigned-word index (RV64)
+                  {
+                    if (f3 == 0) return instTable_.getEntry(InstId::lxsuwb);
+                    if (f3 == 1) return instTable_.getEntry(InstId::lxsuwh);
+                    if (f3 == 2) return instTable_.getEntry(InstId::lxsuww);
+                    if (f3 == 3) return instTable_.getEntry(InstId::lxsuwd);
+                    if (f3 == 4) return instTable_.getEntry(InstId::lxsuwbu);
+                    if (f3 == 5) return instTable_.getEntry(InstId::lxsuwhu);
+                    if (f3 == 6) return instTable_.getEntry(InstId::lxsuwwu);
+                  }
+                return instTable_.getEntry(InstId::illegal);
               }
 
             if (f3 == 0)

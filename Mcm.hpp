@@ -658,11 +658,6 @@ namespace WdRiscv
     /// op in program order.
     bool forwardToRead(Hart<URV>& hart, const std::set<McmInstrIx>& stores, MemoryOp& op) const;
 
-    /// Forward from a write to a read op. Return true on success.  Mask is the mask of
-    /// bits of op to be updated by the forward operation and is updated (bits cleared)
-    /// if some parts of op are successfully updated. This a helper to forwardToRead.
-    bool writeToReadForward(const MemoryOp& writOp, MemoryOp& readOp, uint64_t& mask);
-
     /// Helper to getCurrentLoadValue. Collect overlapping stores preceding instr in
     /// program order and with write times after those of instr reads (write times before
     /// instr reads imply a drained write that can no longer forward to instr).
@@ -923,6 +918,16 @@ namespace WdRiscv
       auto& instr = instrVec.at(op.tag_);
       return instr.di_.extension() == RvExtension::Zicbom;
     }
+
+
+    // Return true if the given write operation addresses are in the range of the
+    // corresponding store isntruction. Return false otherwise priting an error message.
+    bool checkWriteOpAddr(const McmInstr& storeInstr, const MemoryOp& writeOp) const;
+
+    // Return true if the given write operation addresses are in the range of the
+    // corresponding store isntruction. Return false otherwise setting badAddr to
+    // one of the addresses that are out of the range.
+    bool checkWriteOpAddr(const McmInstr& storeInstr, const MemoryOp& writeOp, uint64_t& badAddr) const;
 
   private:
 

@@ -108,6 +108,8 @@ Hart<URV>::execSspush(const DecodedInst* di, unsigned regNum)
       return;
     }
 
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
+
   // write value
   URV data = intRegs_.read(regNum);
 #ifdef FAST_SLOPPY
@@ -140,6 +142,8 @@ Hart<URV>::execSspopchk(const DecodedInst* di, unsigned regNum)
       initiateStoreException(di, cause, ldStFaultAddr_, gaddr);
       return;
     }
+
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
 
   uint64_t data = 0;
 #ifdef FAST_SLOPPY
@@ -175,14 +179,26 @@ Hart<URV>::execSsamoswap_w(const DecodedInst* di)
       illegalInst(di);
       return;
     }
-  if  (not isShadowStackEnabled(privMode_, virtMode_))
-    {
-      if (virtMode_)
-        virtualInst(di);
-      else
-        illegalInst(di);
-      return;
-    }
+
+  // Given the privilege and virtual mode, determines if shadow stack instruction
+  // ssamoswap is legal to execute.
+  using enum PrivilegeMode;
+  auto mode = privMode_;
+
+  if (mode != Machine and not csRegs_.menvcfgSse())
+    { illegalInst(di); return; }
+
+  if (not isRvs())
+    { illegalInst(di); return; }
+
+  if (mode == User and not virtMode_ and not csRegs_.senvcfgSse())
+    { illegalInst(di); return; }
+
+  if (mode == Supervisor and virtMode_ and not csRegs_.henvcfgSse())
+    { virtualInst(di); return; }
+
+  if (mode == User  and virtMode_ and not csRegs_.senvcfgSse())
+    { virtualInst(di); return; }
 
   std::unique_lock lock(memory_.amoMutex_);
 
@@ -202,6 +218,8 @@ Hart<URV>::execSsamoswap_w(const DecodedInst* di)
       initiateStoreException(di, cause, ldStFaultAddr_, gaddr);
       return;
     }
+
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
 
   uint64_t data = 0;
 #ifdef FAST_SLOPPY
@@ -231,14 +249,26 @@ Hart<URV>::execSsamoswap_d(const DecodedInst* di)
       illegalInst(di);
       return;
     }
-  if (not isShadowStackEnabled(privMode_, virtMode_))
-    {
-      if (virtMode_)
-        virtualInst(di);
-      else
-        illegalInst(di);
-      return;
-    }
+
+  // Given the privilege and virtual mode, determines if shadow stack instruction
+  // ssamoswap is legal to execute.
+  using enum PrivilegeMode;
+  auto mode = privMode_;
+
+  if (mode != Machine and not csRegs_.menvcfgSse())
+    { illegalInst(di); return; }
+
+  if (not isRvs())
+    { illegalInst(di); return; }
+
+  if (mode == User and not virtMode_ and not csRegs_.senvcfgSse())
+    { illegalInst(di); return; }
+
+  if (mode == Supervisor and virtMode_ and not csRegs_.henvcfgSse())
+    { virtualInst(di); return; }
+
+  if (mode == User  and virtMode_ and not csRegs_.senvcfgSse())
+    { virtualInst(di); return; }
 
   std::unique_lock lock(memory_.amoMutex_);
 
@@ -259,6 +289,7 @@ Hart<URV>::execSsamoswap_d(const DecodedInst* di)
       return;
     }
 
+  ldStPhysAddr1_ = ldStPhysAddr2_ = addr;
 
   uint64_t data = 0;
 #ifdef FAST_SLOPPY

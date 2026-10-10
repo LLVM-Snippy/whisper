@@ -137,8 +137,8 @@ Hart<URV>::execCbo_clean(const DecodedInst* di)
       illegalInst(di);
       return;
     }
-  else if ( (is_vs and not henvf.bits_.CBCFE) or
-            (is_vu and not (henvf.bits_.CBCFE and senvf.bits_.CBCFE)) )
+  if ( (is_vs and not henvf.bits_.CBCFE) or
+       (is_vu and not (henvf.bits_.CBCFE and senvf.bits_.CBCFE)) )
     {
       virtualInst(di);
       return;
@@ -212,8 +212,8 @@ Hart<URV>::execCbo_flush(const DecodedInst* di)
       illegalInst(di);
       return;
     }
-  else if ( (is_vs and not henvf.bits_.CBCFE) or
-            (is_vu and not (henvf.bits_.CBCFE and senvf.bits_.CBCFE)) )
+  if ( (is_vs and not henvf.bits_.CBCFE) or
+       (is_vu and not (henvf.bits_.CBCFE and senvf.bits_.CBCFE)) )
     {
       virtualInst(di);
       return;
@@ -284,8 +284,8 @@ Hart<URV>::execCbo_inval(const DecodedInst* di)
       illegalInst(di);
       return;
     }
-  else if ( (is_vs and henvf.bits_.CBIE == 0) or
-            (is_vu and (henvf.bits_.CBIE == 0 or senvf.bits_.CBIE == 0)) )
+  if ( (is_vs and henvf.bits_.CBIE == 0) or
+       (is_vu and (henvf.bits_.CBIE == 0 or senvf.bits_.CBIE == 0)) )
     {
       virtualInst(di);
       return;
@@ -363,8 +363,8 @@ Hart<URV>::execCbo_zero(const DecodedInst* di)
       illegalInst(di);
       return;
     }
-  else if ( (is_vs and not henvf.bits_.CBZE) or
-            (is_vu and not (henvf.bits_.CBZE and senvf.bits_.CBZE)) )
+  if ( (is_vs and not henvf.bits_.CBZE) or
+       (is_vu and not (henvf.bits_.CBZE and senvf.bits_.CBZE)) )
     {
       virtualInst(di);
       return;

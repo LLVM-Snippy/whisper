@@ -375,7 +375,11 @@ Hart<URV>::setupVirtMemCallbacks()
         addr = stee_.clearSecureBits(addr);
       }
 
-    if (not pmaMgr_.accessPma(addr).isRsrv())
+    auto pma = pmaMgr_.accessPma(addr);
+    pma = overridePmaWithPbmt(pma, virtMem_.lastPbmt());
+
+    bool ok = pma.isWrite() and pma.isRsrv() and not (pma.isIo() or pma.isNc());
+    if (not ok)
       return false;
 
     if (size == 4)
@@ -459,10 +463,7 @@ Hart<URV>::setupVirtMemCallbacks()
 
     // To write PTE after update of A/D bits we require PMA with write and atomicity
     // attributes.
-    bool ok = pma.isWrite() and (pma.isAmo() or pma.isRsrv());
-
-    // if (mcm_ and dataCache_)
-    // return dataCache_->isLineResident(addr);
+    bool ok = pma.isWrite() and pma.isRsrv() and not (pma.isIo() or pma.isNc());
 
     return ok;
   });
@@ -701,6 +702,7 @@ Hart<URV>::processExtensions(bool verbose)
   enableExtension(RvExtension::Zicsr,    true /*isa_.isEnabled(RvExtension::Zicsr)*/); // Default true until we fix riscof
   enableExtension(RvExtension::Zifencei, true /*isa_.isEnabled(RvExtension::Zifencei)*/); // Default true until RTL catches up
   enableExtension(RvExtension::Zalasr,   isa_.isEnabled(RvExtension::Zalasr));
+  enableExtension(RvExtension::Zilx,     isa_.isEnabled(RvExtension::Zilx));
   enableExtension(RvExtension::Zilsd,    isa_.isEnabled(RvExtension::Zilsd));
   enableExtension(RvExtension::Zclsd,    isa_.isEnabled(RvExtension::Zclsd));
   enableExtension(RvExtension::Zvfbfa,   isa_.isEnabled(RvExtension::Zvfbfa));
@@ -843,6 +845,8 @@ Hart<URV>::processExtensions(bool verbose)
   enableSsnip(isa_.isEnabled(RvExtension::Ssnip));
   enableSmijt(isa_.isEnabled(RvExtension::Smijt));
   enableSsijt(isa_.isEnabled(RvExtension::Ssijt));
+
+  csRegs_.updateStateenMasks();
 
   stimecmpActive_ = csRegs_.menvcfgStce();
   vstimecmpActive_ = csRegs_.henvcfgStce();
@@ -1071,7 +1075,8 @@ Hart<URV>::reset(bool resetMemoryMappedRegs)
       pmaMgr_.clearDefaultPma();  // No access.
       pmaMgr_.enableInDefaultPma(Pma::Attrib::MisalAccFault); // Access fault on misal.
 
-      // Make sure all 64 PMA configs have associated regions.
+      // Make sure all 64 PMA configs have associated regions. Any entry not-yet defined
+      // will get an empty PMA.
       if (pmaMgr_.regionCount() < 64)
         pmaMgr_.defineRegion(64, 0, 0, Pma{});
     }
@@ -1166,7 +1171,7 @@ namespace WdRiscv
     virtMem_.setExecReadable(mstatus_.bits_.MXR);
     virtMem_.setStage1ExecReadable(mstatus_.bits_.MXR);
     virtMem_.setSum(mstatus_.bits_.SUM);
-    if (virtMode_)
+    if (isRvh())
       updateCachedVsstatus();
 
     pmaskManager_.setExecReadable(mstatus_.bits_.MXR);
@@ -1187,7 +1192,7 @@ namespace WdRiscv
     virtMem_.setStage1ExecReadable(mstatus_.bits_.MXR);
     virtMem_.setSum(mstatus_.bits_.SUM);
 
-    if (virtMode_)
+    if (isRvh())
       updateCachedVsstatus();
 
     pmaskManager_.setExecReadable(mstatus_.bits_.MXR);
@@ -1983,7 +1988,7 @@ Hart<URV>::reportLrScStat(FILE* file) const
 
 template <typename URV>
 void
-Hart<URV>::initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2)
+Hart<URV>::initiateLoadException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2)
 {
   initiateException(cause, currPc_, addr1, addr2, di);
 }
@@ -1991,7 +1996,7 @@ Hart<URV>::initiateLoadException(const DecodedInst* di, ExceptionCause cause, UR
 
 template <typename URV>
 void
-Hart<URV>::initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, URV addr2)
+Hart<URV>::initiateStoreException(const DecodedInst* di, ExceptionCause cause, URV addr1, uint64_t addr2)
 {
   initiateException(cause, currPc_, addr1, addr2, di);
 }
@@ -3341,7 +3346,7 @@ Hart<URV>::initiateInterrupt(InterruptCause cause, PrivilegeMode nextMode,
 // Start a synchronous exception.
 template <typename URV>
 void
-Hart<URV>::initiateException(ExceptionCause cause, URV pc, URV info, URV info2, const DecodedInst* di)
+Hart<URV>::initiateException(ExceptionCause cause, URV pc, URV info, uint64_t info2, const DecodedInst* di)
 {
   // Check if stuck because of lack of exception handler. Disable if
   // you do want the stuck behavior.
@@ -3417,15 +3422,16 @@ Hart<URV>::initiateException(ExceptionCause cause, URV pc, URV info, URV info2, 
 }
 
 
-/// Return true if given trap number would result in a guest virtual
-/// address being written to mtval/stval if a trap was taken from
-/// VS/VU to M/HS.
+/// Return true if the address a trap with the given cause reports in mtval/stval is a
+/// guest virtual address: an instruction address is translated under fetchVirt, a data
+/// address under dataVirt. A breakpoint reports a data address only if a load/store
+/// trigger caused it, and a hardware error only if a load/store encountered it.
 bool
-isGvaTrap(bool virtMode, unsigned causeCode)
+isGvaTrap(unsigned causeCode, bool fetchVirt, bool dataVirt, bool breakpOnData,
+          bool hwErrorOnData)
 {
   using EC = ExceptionCause;
 
-  // These may be generated by hypervisor ld/store instructions (e.g. hlv.w).
   EC cause = EC{causeCode};
   switch (cause)
     {
@@ -3434,32 +3440,28 @@ isGvaTrap(bool virtMode, unsigned causeCode)
     case EC::STORE_GUEST_PAGE_FAULT:
       return true;
 
-    default:
-      break;
-    }
-
-  if (not virtMode)
-    return false;
-
-  switch (cause)
-    {
-    case EC::BREAKP:
     case EC::INST_ADDR_MISAL:
     case EC::INST_ACC_FAULT:
+    case EC::INST_PAGE_FAULT:
+      return fetchVirt;
+
     case EC::LOAD_ADDR_MISAL:
     case EC::LOAD_ACC_FAULT:
     case EC::STORE_ADDR_MISAL:
     case EC::STORE_ACC_FAULT:
-    case EC::INST_PAGE_FAULT:
     case EC::LOAD_PAGE_FAULT:
     case EC::STORE_PAGE_FAULT:
-      return true;
+      return dataVirt;
+
+    case EC::BREAKP:
+      return breakpOnData? dataVirt : fetchVirt;
+
+    case EC::HARDWARE_ERROR:
+      return hwErrorOnData? dataVirt : fetchVirt;
 
     default:
       return false;
     }
-
-  return false;
 }
 
 
@@ -3485,7 +3487,7 @@ isGpaTrap(unsigned causeCode)
 template <typename URV>
 uint32_t
 Hart<URV>::createTrapInst(const DecodedInst* di, bool interrupt, unsigned causeCode,
-                          URV info, URV info2) const
+                          URV info, uint64_t info2) const
 {
   using EC = ExceptionCause;
 
@@ -3585,7 +3587,7 @@ void
 Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
                         URV cause,
                         PrivilegeMode nextMode, bool nextVirt,
-                        URV pcToSave, URV info, URV info2)
+                        URV pcToSave, URV info, uint64_t info2)
 {
   if (cancelLrOnTrap_)
     cancelLr(CancelLrCause::TRAP);
@@ -3650,11 +3652,13 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
     }
 
   bool origVirtMode = virtMode_;
-  bool gvaVirtMode = effectiveVirtualMode();
+
+  // With MPRV and MPP=M the access is untranslated even if MPV=1.
+  auto [ldStPm, ldStVirt] = effLdStMode();
+  bool dataVirt = hyperLs_ or (ldStVirt and ldStPm != PM::Machine);
 
   uint32_t tinst = isRvh()? createTrapInst(di, interrupt, cause, info, info2) : 0;
 
-  // Traps are taken in machine mode.
   setPrivilegeMode(nextMode);
   virtMode_ = nextVirt;
 
@@ -3732,10 +3736,10 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
   using EC = ExceptionCause;
   injectException_ = EC::NONE;
 
-  bool gva = isRvh() and not interrupt and (hyperLs_ or isGvaTrap(gvaVirtMode, cause));
-  if (origVirtMode  and  cause == unsigned(EC::HARDWARE_ERROR)  and not  interrupt)
-    gva = true;
-  else if (lastEbreak_)
+  bool gva = ( isRvh() and not interrupt and
+               isGvaTrap(cause, origVirtMode, dataVirt, ldStTriggerTripped_,
+                         injectExceptionIsLd_) );
+  if (lastEbreak_)
     {
       if (clearMtvalOnEbreak_)
         gva = false;
@@ -3915,7 +3919,7 @@ Hart<URV>::initiateTrap(const DecodedInst* di, bool interrupt,
 	}
       else if (cause != URV(ExceptionCause::BREAKP))
 	{
-	  if (csRegs_.expTriggerHit(cause, privMode_, virtMode_, isBreakpInterruptEnabled()))
+	  if (csRegs_.expTriggerHit(cause, origMode, origVirtMode, isBreakpInterruptEnabled()))
             initiateException(ExceptionCause::BREAKP, pc_, 0, 0, di);
 	}
     }
@@ -4499,6 +4503,63 @@ Hart<URV>::peekCsr(CsrNumber csrn, std::string_view field, URV& val) const
 
 
 template <typename URV>
+void
+Hart<URV>::syncPmamgrToPmacfg()
+{
+  using CN = CsrNumber;
+
+  for (unsigned i = 0; i < 15; ++i)
+    {
+      if (i >= pmaMgr_.regionCount())
+        continue;
+
+      auto cfgNum = csRegs_.advance(CN::PMACFG0, i);
+      URV cfgVal = 0;
+
+      if (not peekCsr(cfgNum, cfgVal))
+        continue;
+
+      if (cfgVal == 0)
+        continue;  // PMACFG was not configured.
+
+      Pma pma;
+      uint64_t mask = 0, low = 0, high = 0;
+      if (pmaMgr_.unpackPmacfg(cfgVal, low, high, mask, pma))
+        pmaMgr_.setRegionPma(i, pma);
+    }
+
+  URV savedSel = 0;  // Previous value of MISELECT.
+
+  if (not peekCsr(CN::MISELECT, savedSel))
+    return;
+
+  // Process PMA configurations 16 to 63. These are accessed with MISELECT/MIREG.
+  for (unsigned i = 16; i < 64; ++i)
+    {
+      if (i >= pmaMgr_.regionCount())
+        continue;
+
+      URV sel = URV(1) << (sizeof(URV)*8 - 1);  // Set most sig bit for custom CSR select.
+      sel = sel | URV(i);
+      if (not pokeCsr(CN::MISELECT, sel, false))
+        assert(0);
+
+      URV cfgVal = 0;
+      if (not csRegs_.readMireg(CN::MIREG, cfgVal, false))
+        assert(0);
+      
+      Pma pma;
+      uint64_t mask = 0, low = 0, high = 0;
+      if (pmaMgr_.unpackPmacfg(cfgVal, low, high, mask, pma))
+        pmaMgr_.setRegionPma(i, pma);
+    }
+
+  if (not pokeCsr(CN::MISELECT, savedSel, false))
+    assert(0);
+}
+
+
+template <typename URV>
 bool
 Hart<URV>::processPmacfgChange(CsrNumber csr, URV newVal)
 {
@@ -4796,7 +4857,7 @@ Hart<URV>::postCsrUpdate(CsrNumber csr, URV val, URV lastVal)
   else if (csr == CN::VSSTATUS)
     updateCachedVsstatus();
 
-  if (csRegs_.peekMstatus() != mstatus_.value())
+  if (csRegs_.peekMstatus() != mstatus_.value() or csr == CN::MSTATUSH)
     {
       updateCachedMstatus();
       if (isRvsmdbltrp() and mstatus_.bits_.MDT)
@@ -5168,6 +5229,27 @@ Hart<URV>::configIsa(std::string_view isa, bool updateMisa)
       fields.bits_.ALTFMT = 1;
       csr->setPokeMask(fields.value_);
       csr->setWriteMask(fields.value_);
+    }
+
+  // Make MIP/NIE bits corresponding to the S and H extensions read only zero if
+  // those extensions are not enabled. This can be over-ridden at run time by the
+  // user configuration.
+
+  URV rozBits = 0;
+  if (not isa_.isEnabled(RvExtension::S))
+    rozBits |= 0x222;  // SEIP/STIP/SSIP
+
+  if (not isa_.isEnabled(RvExtension::H))
+    rozBits |= 0x1444;  // SGEIP/VSEIP/VSTIP/VSSIP
+
+  if (not isa_.isEnabled(RvExtension::Sscofpmf))
+    rozBits |= 0x2000;  // LCOFIP
+
+  for (CsrNumber cn : { CsrNumber::MIP , CsrNumber::MIE } )
+    {
+      auto csr = csRegs_.findCsr(cn);
+      csr->setWriteMask(csr->getWriteMask() & ~rozBits);
+      csr->setPokeMask(csr->getPokeMask() & ~rozBits);
     }
 
   return true;
@@ -11498,6 +11580,28 @@ Hart<URV>::execute(const DecodedInst* di)
       execVfwbdota_vv(di);
       return;
 
+    case InstId::lxh:
+    case InstId::lxw:
+    case InstId::lxd:
+    case InstId::lxhu:
+    case InstId::lxwu:
+    case InstId::lxsb:
+    case InstId::lxsh:
+    case InstId::lxsw:
+    case InstId::lxsd:
+    case InstId::lxsbu:
+    case InstId::lxshu:
+    case InstId::lxswu:
+    case InstId::lxsuwb:
+    case InstId::lxsuwh:
+    case InstId::lxsuww:
+    case InstId::lxsuwd:
+    case InstId::lxsuwbu:
+    case InstId::lxsuwhu:
+    case InstId::lxsuwwu:
+      execZilx(di);
+      return;
+
     case InstId::endId_:
       assert(0 && "Error: Shouldn't be able to get here");
       return;
@@ -12518,7 +12622,8 @@ Hart<URV>::execSret(const DecodedInst* di)
   // Set ELP.
   if (isRvZicfilp())
     {
-      setElp(isLandingPadEnabled(savedMode, savedVirt)? fields.bits_.SPELP : false);
+      bool nextVirt = virtMode_ or hstatus_.bits_.SPV; // Virt mode after sret.
+      setElp(isLandingPadEnabled(savedMode, nextVirt)? fields.bits_.SPELP : false);
       fields.bits_.SPELP = 0;
     }
 
@@ -12655,54 +12760,53 @@ Hart<URV>::execWfi(const DecodedInst* di)
 {
   using PM = PrivilegeMode;
   auto pm = privilegeMode();
-
-  if (pm == PM::Machine)
-    return;
-
   bool tw = mstatus_.bits_.TW;
   bool vtw = hstatus_.bits_.VTW;
 
+  // VU-mode with TW=0 has no bounded-time exception. Always trap;
+  // wfi_stall_exception does not apply.
+  if (virtMode_ and pm == PM::User and not tw)
+    {
+      virtualInst(di);
+      return;
+    }
+
+  auto bound = wfiTimeout_;
+  while (bound-- > 0)
+    {
+      InterruptCause cause{};
+      PrivilegeMode nextMode = PrivilegeMode::Machine;
+      bool nextVirt = false, hvi = false;
+      tickTime();  // Advance time.
+      processTimerInterrupt();
+      if (isInterruptPossible(cause, nextMode, nextVirt, hvi))
+	return;  // Completed within the bound.
+      // M-mode: resume on a locally enabled pending interrupt even when
+      // mstatus.MIE is clear. Do not take it; the next instruction will.
+      if (pm == PM::Machine and (csRegs_.effectiveMip() & csRegs_.peekMie()))
+	return;
+    }
+
+  // Bound expired (including wfiTimeout_ == 0). TW does not apply to M-mode.
+  if (pm == PM::Machine)
+    return;
+  if (not wfiStallException_)
+    return;
+
   if (tw)
     {
-      // TW is 1 and Executing in privilege less than machine: illegal unless
-      // complete in bounded time.
-      illegalInst(di);  // FIX: handle bounded time.
-      return;
+      // TW=1 in less than M: illegal unless WFI completed within the bound.
+      illegalInst(di);
     }
-
-  // TW is 0.
-
-  if (virtMode_)
+  else if (virtMode_ and pm == PM::Supervisor and vtw)
     {
-      if (pm == PM::Supervisor)
-        {
-          // Spec: In VS-mode, attempts to execute WFI when hstatus.VTW=1 and mstatus.TW=0
-          // raise a virtual-instruction exception, unless the instruction completes within an
-          // implementation-specific, bounded time.
-          if (vtw)  // TW is 0
-            {
-              // FIX: handle bounded time.
-              virtualInst(di);
-              return;
-            }
-        }
-      else if (pm == PM::User)
-        {
-          // Spec (when to raise virtual instruction):
-          //  in VU-mode, attempts to execute WFI when mstatus.TW=0
-          virtualInst(di);  // TW is 0
-          return;
-        }
+      // VS-mode, VTW=1, TW=0: virtual unless completed within the bound.
+      virtualInst(di);
     }
-
-  // Spec: When S-mode is implemented, then executing WFI in U-mode causes an
-  // illegal-instruction exception, regardless of the value of the TW bit, unless the
-  // instruction completes within an implementation-specific, bounded time limit.
-  if (pm == PM::User and isRvs() and not virtMode_)
+  else if (pm == PM::User and isRvs() and not virtMode_)
     {
-      if (wfiTimeout_ == 0)
-	illegalInst(di);
-      return;
+      // U-mode with S implemented: illegal unless completed within the bound.
+      illegalInst(di);
     }
 }
 
@@ -14233,6 +14337,75 @@ Hart<URV>::execRemu(const DecodedInst* di)
   recordDivInst(di->op0(), peekIntReg(di->op0()));
 
   intRegs_.write(di->op0(), c);
+}
+
+
+template <typename URV>
+template <typename LOAD_TYPE>
+void
+Hart<URV>::execZilxLoad(const DecodedInst* di, bool doScale, bool zextIndex)
+{
+  if (not isRvZilx())
+    {
+      illegalInst(di);
+      return;
+    }
+
+  URV size = sizeof(LOAD_TYPE);
+  bool isSigned = std::is_signed_v<LOAD_TYPE>;
+  if ((zextIndex or size == 8 or (size == 4 and not isSigned)) and not isRv64())
+    {
+      illegalInst(di);
+      return;
+    }
+
+  URV index = intRegs_.read(di->op1());
+  URV base = intRegs_.read(di->op2());
+  if (zextIndex)
+    index = URV(uint32_t(index));
+
+  if (doScale)
+    index *= size;
+
+  uint64_t virtAddr = URV(base + index);
+
+  uint64_t data = 0;
+  bool ok = load<LOAD_TYPE>(di, virtAddr, data);
+
+  if (ok)
+    intRegs_.write(di->op0(), data);
+}
+
+
+template <typename URV>
+void
+Hart<URV>::execZilx(const DecodedInst* di)
+{
+  switch (di->instId())
+    {
+    case InstId::lxh:     execZilxLoad<int16_t> (di, false, false); return;
+    case InstId::lxw:     execZilxLoad<int32_t> (di, false, false); return;
+    case InstId::lxd:     execZilxLoad<uint64_t>(di, false, false); return;
+    case InstId::lxhu:    execZilxLoad<uint16_t>(di, false, false); return;
+    case InstId::lxwu:    execZilxLoad<uint32_t>(di, false, false); return;
+    case InstId::lxsb:    execZilxLoad<int8_t>  (di, true,  false); return;
+    case InstId::lxsh:    execZilxLoad<int16_t> (di, true,  false); return;
+    case InstId::lxsw:    execZilxLoad<int32_t> (di, true,  false); return;
+    case InstId::lxsd:    execZilxLoad<uint64_t>(di, true,  false); return;
+    case InstId::lxsbu:   execZilxLoad<uint8_t> (di, true,  false); return;
+    case InstId::lxshu:   execZilxLoad<uint16_t>(di, true,  false); return;
+    case InstId::lxswu:   execZilxLoad<uint32_t>(di, true,  false); return;
+    case InstId::lxsuwb:  execZilxLoad<int8_t>  (di, true,  true);  return;
+    case InstId::lxsuwh:  execZilxLoad<int16_t> (di, true,  true);  return;
+    case InstId::lxsuww:  execZilxLoad<int32_t> (di, true,  true);  return;
+    case InstId::lxsuwd:  execZilxLoad<uint64_t>(di, true,  true);  return;
+    case InstId::lxsuwbu: execZilxLoad<uint8_t> (di, true,  true);  return;
+    case InstId::lxsuwhu: execZilxLoad<uint16_t>(di, true,  true);  return;
+    case InstId::lxsuwwu: execZilxLoad<uint32_t>(di, true,  true);  return;
+    default:
+      illegalInst(di);
+      return;
+    }
 }
 
 

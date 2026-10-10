@@ -488,6 +488,21 @@ namespace WdRiscv
     void setDecompressionType(const std::string& decompressionType)
     { snapDecompressionType_ = decompressionType; }
 
+    /// Set the memory initializaiton mode. Currently supported only in the sparse memory
+    /// model.
+    void setSparseMemInitMode(SparseMem::InitMode mode)
+    {
+      if (sparseMem_)
+        sparseMem_->setInitMode(mode);
+    }
+
+    /// Set the memory initializaiton salt for salt mode.
+    void setSparseMemInitSalt(uint64_t salt)
+    {
+      if (sparseMem_)
+        sparseMem_->setInitSalt(salt);
+    }
+
   private:
 
     bool saveAplicSnapshot(const Filesystem::path& snapDir) const;
@@ -538,5 +553,7 @@ namespace WdRiscv
     std::atomic<int> snapIx_ = -1;
     std::string snapCompressionType_ = "gzip";
     std::string snapDecompressionType_ = "gzip";
+
+    SparseMem::InitMode mim_ = SparseMem::InitMode::Zero;
   };
 }

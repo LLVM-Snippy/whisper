@@ -205,7 +205,7 @@ SparseMem::getUsedBlocks(std::vector<std::pair<uint64_t, uint64_t>>& vec) const
 
 
 bool
-SparseMem::initializePage(uint64_t addr, const std::span<uint8_t> buffer)
+SparseMem::fillPage(uint64_t addr, const std::span<uint8_t> buffer)
 {
   if (((addr >> pageShift_) << pageShift_) != addr)
     return false;  // Addr is not page aligned.
@@ -215,4 +215,39 @@ SparseMem::initializePage(uint64_t addr, const std::span<uint8_t> buffer)
   std::vector<uint8_t>& page = findOrCreatePage(getPageRank(addr));
   memcpy(page.data(), buffer.data(), pageSize_);
   return true;
+}
+
+
+void
+SparseMem::initPage(uint64_t pageNum, std::vector<uint8_t>& page)
+{
+  if (initMode_ == InitMode::Zero)
+    return;   // Page initialized to zero at creation.
+
+  uint64_t addr = pageNum * pageSize_;
+
+  if (initMode_ == InitMode::Addr)
+    {
+      for (size_t i = 0; i < pageSize_; ++i, ++addr)
+        page.at(i) = (addr & 0xff);
+      return;
+    }
+
+  if (initMode_ == InitMode::Salt)
+    {
+      for (size_t i = 0; i < pageSize_; ++i, ++addr)
+        {
+          uint64_t z = addr ^ initSalt_;
+
+          z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b7;
+          z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+          z = z ^ (z >> 31);
+
+          uint8_t byte = z >> (8 * (addr & 3));
+          page.at(i) = byte;
+        }
+      return;
+    }
+
+  assert(0);
 }

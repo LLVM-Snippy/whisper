@@ -311,26 +311,26 @@ Hart<URV>::execVmsof_m(const DecodedInst* di)
       bool found = false;  // true if set bit is found in vs1
 
       for (uint32_t ix = start; ix < elemCount; ++ix)
-	{
-	  bool flag = false;
-	  bool active = vecRegs_.isMaskDestActive(vd, ix, masked, elemCount, flag);
+        {
+          bool flag = false;
+          bool active = vecRegs_.isMaskDestActive(vd, ix, masked, elemCount, flag);
 
-	  bool input = false;
+          bool input = false;
 
           if (active)
             {
               vecRegs_.readMaskRegister(vs1, ix, input);   // Read input.
               vecRegs_.writeMaskRegister(vd, ix, false);   // Write 0 in oputput.
             }
-	  else if (ones)
-	    vecRegs_.writeMaskRegister(vd, ix, true);  // Not active and all ones mask agnostic
+          else if (ones)
+            vecRegs_.writeMaskRegister(vd, ix, true);  // Not active and all ones mask agnostic
 
-	  if (found or not input)
-	    continue;
+          if (found or not input)
+            continue;
 
-	  found = true;
-	  vecRegs_.writeMaskRegister(vd, ix, true);
-	}
+          found = true;
+          vecRegs_.writeMaskRegister(vd, ix, true);
+        }
 
       // In case we did not compute as if vl=vlmax, fill tail bits with ones if so configured.
       vecRegs_.finishMaskDest(vd, elemCount);

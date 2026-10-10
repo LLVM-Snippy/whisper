@@ -309,8 +309,8 @@ Memory::loadBinaryFile(const std::string& fileName, uint64_t addr)
           auto page = mappedSpan.subspan(n, pageSize_);
           bool allZero = page[0] == 0 && memcmp(page.data(), &page[1], pageSize_ - 1) == 0;
           if (not allZero)
-            if (not initializePage(addr, page))
-              assert(0 && "Error: initializePage failed");
+            if (not fillPage(addr, page))
+              assert(0 && "Error: fillPage failed");
           addr += pageSize_;
           n += pageSize_ - 1;  // loop will add 1 more
           continue;
@@ -405,7 +405,7 @@ Memory::loadLz4File(const std::string& fileName, uint64_t addr)
                   uint8_t* data = &dst.at(n);
                   bool allZero = *data == 0 && memcmp(data, data + 1, pageSize_ - 1) == 0;
                   if (not allZero)
-                    if (not initializePage(addr, std::span(data, pageSize_)))
+                    if (not fillPage(addr, std::span(data, pageSize_)))
                       assert(0 && "Error: Assertion failed");
                   addr += pageSize_ - 1;
                   n += pageSize_ - 1;
@@ -1695,7 +1695,7 @@ Memory::initializeByte(uint64_t addr, uint8_t value)
 
 
 bool
-Memory::initializePage(uint64_t addr, const std::span<uint8_t> buffer)
+Memory::fillPage(uint64_t addr, const std::span<uint8_t> buffer)
 {
   if (not isPageAligned(addr))
     return false;
@@ -1715,8 +1715,8 @@ Memory::initializePage(uint64_t addr, const std::span<uint8_t> buffer)
 
 #else
   
-  if (initPageCallback_)
-    return initPageCallback_(addr, buffer);
+  if (fillPageCallback_)
+    return fillPageCallback_(addr, buffer);
 
   const uint8_t* ba = buffer.data();
   for (unsigned i = 0; i < pageSize_; i += 8, addr += 8, ba += 8)

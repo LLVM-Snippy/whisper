@@ -792,7 +792,7 @@ namespace WdRiscv
     Va32x4Bits bits_;
     uint64_t data_ = 0;
 
-    Va32x4(uint32_t word) : data_(word)
+    Va32x4(uint64_t word) : data_(word)
     { }
 
     uint32_t offset() const { return bits_.offset_; }

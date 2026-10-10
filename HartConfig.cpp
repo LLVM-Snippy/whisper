@@ -981,6 +981,16 @@ applyVectorConfig(Hart<URV>& hart, const nlohmann::json& config)
 	}
     }
 
+  tag = "agnostic_override_for_overlap";
+  if (vconf.contains(tag))
+    {
+      bool flag = false;
+      if (getJsonBoolean(tag, vconf.at(tag), flag))
+        hart.configAgnosticOverrideForOverlap(flag);
+      else
+        errors++;
+    }
+
   tag = "trap_non_zero_vstart";
   if (vconf.contains(tag))
     {
@@ -1576,9 +1586,10 @@ applyPmaConfig(Hart<URV>& hart, const nlohmann::json& config, bool hasPmacfgCsr)
 
 template<typename URV>
 bool
-HartConfig::applyMemoryConfig(Hart<URV>& hart) const
+HartConfig::applyMemoryConfig(System<URV>& system, Hart<URV>& hart) const
 {
   unsigned errors = 0;
+  using std::cerr;
 
   if (config_ -> contains("memmap"))
     {
@@ -1594,7 +1605,7 @@ HartConfig::applyMemoryConfig(Hart<URV>& hart) const
         {
           bool flag = false;
           if (getJsonBoolean(tag, memMap.at(tag), flag))
-            hart.setAllowAmoInNonCachable(flag);
+            hart.allowAmoInNonCachable(flag);
           else
             errors++;
         }
@@ -1604,17 +1615,88 @@ HartConfig::applyMemoryConfig(Hart<URV>& hart) const
         {
           bool flag = false;
           if (getJsonBoolean(tag, memMap.at(tag), flag))
-            hart.setAllowAmoInIo(flag);
+            hart.allowAmoInIo(flag);
           else
             errors++;
+        }
+
+      tag = "allow_rsrv_in_non_cacheable_regions";
+      if (memMap.contains(tag))
+        {
+          bool flag = false;
+          if (getJsonBoolean(tag, memMap.at(tag), flag))
+            hart.allowRsrvInNonCacheable(flag);
+          else
+            errors++;
+        }
+
+      tag = "allow_rsrv_in_io_regions";
+      if (memMap.contains(tag))
+        {
+          bool flag = false;
+          if (getJsonBoolean(tag, memMap.at(tag), flag))
+            hart.allowRsrvInIo(flag);
+          else
+            errors++;
+        }
+
+      tag = "default_pma";
+      if (memMap.contains(tag))
+        {
+          Pma pma;
+          if (not getConfigPma("memmap.default_pma", memMap.at(tag), pma))
+            errors++;
+          else
+            {
+              if (pma.hasMemMappedReg())
+                {
+                  cerr << "Warning: Configuration file default_pma has mem_mapped"
+                       << " -- mem_mapped ignored\n";
+                  pma.disable(Pma::MemMapped);
+                }
+              hart.setDefaultPma(pma);
+            }
         }
     }
 
   if (config_ -> contains("cache"))
-      std::cerr << "Warning: Configuration entry 'cache' no longer supported -- ignored\n";
+    cerr << "Warning: Configuration entry 'cache' no longer supported -- ignored\n";
+
+  std::string tag = "memory_initialization_mode";
+  if (config_ -> contains(tag))
+    {
+      using MIM = SparseMem::InitMode;
+
+      std::string val = config_ -> at(tag).get<std::string>();
+      if (val == "zero")
+        system.setSparseMemInitMode(MIM::Zero);
+      else if (val == "address")
+        system.setSparseMemInitMode(MIM::Addr);
+      else if (val == "salt")
+        {
+          system.setSparseMemInitMode(MIM::Salt);
+          system.setSparseMemInitSalt(0);
+        }
+      else if (val.starts_with("salt:"))
+        {
+          auto saltStr = val.substr(sizeof("salt:") - 1);
+          char* end = nullptr;
+          uint64_t salt = strtoull(saltStr.data(), &end, 0);
+          if (end and *end)
+            cerr << "Warning: Invalid memory_initialization_mode salt value '"
+                 << saltStr << "' -- ignored\n";
+          else
+            {
+              system.setSparseMemInitMode(MIM::Salt);
+              system.setSparseMemInitSalt(salt);
+            }
+        }
+      else
+        cerr << "Warning: Unknown memory_initialization_mode '" << val << "' -- ignored\n";
+    }
 
   // Temporary.
-  std::string_view tag = "babylon_pma";
+  tag = "babylon_pma";
   if (config_ -> contains(tag))
     {
       if (bool flag = false; getJsonBoolean(tag, config_ -> at(tag), flag))
@@ -2886,6 +2968,14 @@ HartConfig::applyConfig(Hart<URV>& hart, bool userMode, bool verbose) const
       hart.setWfiTimeout(timeout);
     }
 
+  tag = "wfi_stall_exception";
+  if (config_ ->contains(tag))
+    {
+      bool flag = false;
+      getJsonBoolean(tag, config_ ->at(tag), flag) or errors++;
+      hart.setWfiStallException(flag);
+    }
+
   tag = "hfence_gvma_ignores_gpa";
   if (config_ ->contains(tag))
     {
@@ -3479,7 +3569,7 @@ HartConfig::configMemory(System<URV>& system, bool unmappedElfOk) const
   for (unsigned i = 0; i < system.hartCount(); ++i)
     {
       auto& hart = *system.ithHart(i);
-      ok = applyMemoryConfig(hart) and ok;
+      ok = applyMemoryConfig(system, hart) and ok;
     }
 
   return ok;
@@ -3844,10 +3934,10 @@ HartConfig::configMemory(System<uint64_t>&, bool) const;
 
 
 template bool
-HartConfig::applyMemoryConfig<uint32_t>(Hart<uint32_t>&) const;
+HartConfig::applyMemoryConfig<uint32_t>(System<uint32_t>&, Hart<uint32_t>&) const;
 
 template bool
-HartConfig::applyMemoryConfig<uint64_t>(Hart<uint64_t>&) const;
+HartConfig::applyMemoryConfig<uint64_t>(System<uint64_t>&, Hart<uint64_t>&) const;
 
 template bool
 HartConfig::finalizeCsrConfig<uint32_t>(System<uint32_t>&) const;

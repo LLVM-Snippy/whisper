@@ -979,6 +979,9 @@ Mcm<URV>::mergeBufferInsert(Hart<URV>& hart, uint64_t time, uint64_t tag, uint64
   auto& undrained = hartData_.at(hartIx).undrainedStores_;
   undrained.insert(tag);
 
+  if (instr->isRetired())
+    return checkWriteOpAddr(*instr, op);
+
   return true;
 }
 
@@ -1058,6 +1061,8 @@ Mcm<URV>::bypassOp(Hart<URV>& hart, uint64_t time, uint64_t tag, uint64_t pa,
       if (instr->di_.extension() == RvExtension::Zicbom)
         result = checkCmo(hart, *instr) and result;
     }
+  // else if (instr->isRetired())
+  // result = checkWriteOpAddr(*instr, op) and result;
 
   return result;
 }
@@ -1154,14 +1159,16 @@ Mcm<URV>::retireStore(Hart<URV>& hart, McmInstr& instr)
   auto& undrained = hartData_.at(hartIx).undrainedStores_;
 
   if (instr.isStore_ and not instr.complete_)
-    {
-      undrained.insert(instr.tag_);
-      return ok;
-    }
+    undrained.insert(instr.tag_);
+  else
+    undrained.erase(instr.tag_);    // Store complete or an unsuccessful amocas: mark as drained.
 
-  // If store is complete or if we have an unsuccessful amocas, mark as drained.
-  if (not instr.isStore_ or instr.complete_)
-    undrained.erase(instr.tag_);
+  for (const auto& opIx : instr.memOps_)
+    {
+      auto& op = sysMemOps_.at(opIx);
+      if (op.bypass_ or not op.isRead_)
+        ok = checkWriteOpAddr(instr, op) and ok;
+    }
 
   return ok;
 }
@@ -1713,39 +1720,6 @@ Mcm<URV>::mergeBufferWrite(Hart<URV>& hart, uint64_t time, uint64_t physAddr,
 
 
 template <typename URV>
-bool
-Mcm<URV>::writeToReadForward(const MemoryOp& writeOp, MemoryOp& readOp, uint64_t& mask)
-{
-  if (mask == 0)
-    return true;  // No bytes left to forward.
-
-  if (not readOp.overlaps(writeOp))
-    return false;
-
-  unsigned count = 0; // Count of forwarded bytes
-  for (unsigned rix = 0; rix < readOp.size_ and mask != 0; ++rix)
-    {
-      uint64_t byteAddr = readOp.pa_ + rix;
-      if (not writeOp.overlaps(byteAddr))
-	continue;  // Read-op byte does not overlap write-op.
-
-      uint64_t byteMask = uint64_t(0xff) << (rix * 8);
-      if ((byteMask & mask) == 0)
-	continue;  // Byte forwarded by another instruction.
-
-      uint8_t byteVal = writeOp.rtlData_ >> (byteAddr - writeOp.pa_)*8;
-      uint64_t aligned = uint64_t(byteVal) << 8*rix;
-	
-      readOp.data_ = (readOp.data_ & ~byteMask) | aligned;
-      mask = mask & ~byteMask;
-      count++;
-    }
-
-  return count > 0;
-}
-
-
-template <typename URV>
 void
 Mcm<URV>::cancelInstr(Hart<URV>& hart, McmInstr& instr)
 {
@@ -2035,6 +2009,97 @@ Mcm<URV>::checkVecStoreData(Hart<URV>& hart, const McmInstr& store) const
           return false;
         }
     }
+
+  return true;
+}
+
+
+template <typename URV>
+bool
+Mcm<URV>::checkWriteOpAddr(const McmInstr& instr, const MemoryOp& op) const
+{
+  uint64_t badAddr = 0;
+  if (not checkWriteOpAddr(instr, op, badAddr))
+    {
+      std::cerr << "Error: hart-id=" << unsigned(instr.hartIx_) << " tag=" << instr.tag_
+                << " write/bypass operation address 0x" << std::hex << badAddr
+                << " is not within its store instr addr range\n" << std::dec;
+      return false;
+    }
+
+  return true;
+}
+
+
+template <typename URV>
+bool
+Mcm<URV>::checkWriteOpAddr(const McmInstr& instr, const MemoryOp& op, uint64_t& badAddr) const
+{
+  if (not instr.isStore_)
+    return true;  // Should not happen
+
+  assert(not op.isRead_);
+  assert(instr.isRetired());
+
+  // Check that all write operation addresses faill within the addresses of the
+  // corresponding store instruction.
+
+  bool isScalar = not instr.di_.isVector();
+
+  if (isScalar)
+    {
+      if (instr.physAddr_ == instr.physAddr2_)   // Not a page crosser
+        {
+          for (unsigned i = 0; i < op.size_; ++i)
+            {
+              uint64_t addr = op.pa_ + i;
+              if ((addr < instr.physAddr_) or (addr >= instr.physAddr_ + instr.size_))
+                {
+                  badAddr = addr;
+                  return false;
+                }
+            }
+          return true;
+        }
+
+      auto size1 = offsetToNextPage(instr.physAddr_);
+      auto size2 = instr.size_ - size1;
+
+      for (unsigned i = 0; i < op.size_; ++i)
+        {
+          uint64_t addr = op.pa_ + i;
+          if ( ((addr >= instr.physAddr_)  and (addr < instr.physAddr_  + size1)) or
+               ((addr >= instr.physAddr2_) and (addr < instr.physAddr2_ + size2)) )
+            continue;
+          badAddr = addr;
+          return false;
+        }
+      return true;
+    }
+
+  // Vector store.
+  auto& vecRefMap = hartData_.at(instr.hartIx_).vecRefMap_;
+  auto iter = vecRefMap.find(instr.tag_);
+  assert(iter != vecRefMap.end());
+  auto& vecRefs = iter->second;
+
+  // Remaining addresses of op that are not covered by instruction address range.
+  uint64_t remain = (uint64_t(1) << (op.size_ + 1)) - 1; // 1 bit for each op address
+
+  for (auto& ref : vecRefs.refs_)
+    for (unsigned i = 0; i < op.size_; ++i)
+      {
+        uint64_t addr = op.pa_ + i;
+        if (addr >= ref.pa_ and addr < ref.pa_ + ref.size_)
+          remain &= ~(uint64_t(1) << i);  // Addr covered, clear corresonding bit
+      }
+
+  for (unsigned i = 0; i < op.size_; ++i)
+    if (remain & (1 << i))
+      {
+        badAddr = op.pa_ + i;
+        return false;
+      }
 
   return true;
 }
@@ -3952,9 +4017,13 @@ Mcm<URV>::finalChecks(Hart<URV>& hart)
   for (auto tag : undrained)
     {
       const auto& instr = instrVec.at(tag);
-      if (not hasToHost or toHost != instr.virtAddr_)
-	cerr << "Warning: Hart-id=" << hart.hartId() << " tag=" << instr.tag_
-	     << " Store instruction is not drained at end of run\n";
+      if (hasToHost and toHost == instr.virtAddr_)
+        continue;
+
+      cerr << "Warning: Hart-id=" << hart.hartId() << " tag=" << instr.tag_
+           << " Store instruction is not drained at end of run\n";
+
+      // Check for incorrect store operatoin addresses.
     }
 
   return true;
@@ -4297,8 +4366,10 @@ Mcm<URV>::ppoRule4(Hart<URV>& hart, const McmInstr& instrB) const
                 }
 
               // Successor performs before predecessor -- Allow if successor is a load
-              // and there is no store from another core to the same cache line.
+              // and there is no store from another hart to the same cache line.
               bool fail = true;
+              unsigned ohx = hartIx;  // Other hart index
+              uint64_t oht = 0;  // Time of write op from other hart.
               if (bOp.isRead_)
                 {
                   fail = false;
@@ -4311,6 +4382,8 @@ Mcm<URV>::ppoRule4(Hart<URV>& hart, const McmInstr& instrB) const
                         continue;
                       predTime = aOp.forwardTime(addr);  // Predecessor byte time
                       succTime = bOp.forwardTime(addr);
+                      if (predWrite)
+                        succTime = bOp.time_;
                       if (predTime < succTime)
                         continue;
 
@@ -4330,6 +4403,8 @@ Mcm<URV>::ppoRule4(Hart<URV>& hart, const McmInstr& instrB) const
                               lineNum(op.pa_) != lineNum(addr))
                             continue;
                           fail = op.time_ >= succTime and op.time_ <= predTime;
+                          ohx = op.hartIx_;
+                          oht = op.time_;
                         }
                     }
                 }
@@ -4340,7 +4415,10 @@ Mcm<URV>::ppoRule4(Hart<URV>& hart, const McmInstr& instrB) const
                        << " tag1=" << pred.tag_ << " tag2=" << succ.tag_
                        << " fence-tag=" << fence.tag_
                        << " time1=" << predTime << " time2=" << succTime
-                       << " pa=0x" << std::hex << aOp.pa_ << std::dec << '\n';
+                       << " pa=0x" << std::hex << aOp.pa_ << std::dec;
+                  if (ohx != hartIx)
+                    cerr << " other-hart-ix=" << ohx << " other-hart-write-time=" << oht;
+                  cerr << '\n';
                   return false;
                 }
             }
@@ -4434,32 +4512,29 @@ Mcm<URV>::ppoRule5(Hart<URV>& hart, const McmInstr& instrB) const
     {
       for (auto& tag : undrained)
 	{
-	  if (tag < instrB.tag_)
-	    {
-	      const auto& instrA = instrVec.at(tag);
-	      bool hasAcquire = instrA.di_.hasAcquire();
-	      if (isTso_)
-		hasAcquire = hasAcquire or instrA.di_.isLoad() or instrA.di_.isAmo();
-      if (hasAcquire)
-	{
-	  uint64_t conflictAddr = 0;
-	  if (not ppoRule5(hart, instrA, instrB, conflictAddr))
-	    {
-	      unsigned vecBytesB = getVectorLdstByteCount(hart, instrB);
-	      cerr << "Error: PPO rule 5 failed: hart-id=" << hart.hartId()
-		   << " tag1=" << instrA.tag_ << " tag2=" << instrB.tag_;
-	      if (conflictAddr != 0)
-		cerr << std::hex << " addr=0x" << conflictAddr << std::dec;
-	      if (vecBytesB > 0 and (instrB.di_.isVectorLoad() or instrB.di_.isVectorStore()))
-		cerr << " tag2-vec-bytes=" << vecBytesB;
-	      cerr << '\n';
-	      return false;
-	    }
-	}
-	    }
-	  else
-	    break;
-	}
+          if (tag >= instrB.tag_)
+            break;
+          const auto& instrA = instrVec.at(tag);
+          bool hasAcquire = instrA.di_.hasAcquire();
+          if (isTso_)
+            hasAcquire = hasAcquire or instrA.di_.isLoad() or instrA.di_.isAmo();
+          if (hasAcquire)
+            {
+              uint64_t conflictAddr = 0;
+              if (not ppoRule5(hart, instrA, instrB, conflictAddr))
+                {
+                  unsigned vecBytesB = getVectorLdstByteCount(hart, instrB);
+                  cerr << "Error: PPO rule 5 failed: hart-id=" << hart.hartId()
+                       << " tag1=" << instrA.tag_ << " tag2=" << instrB.tag_;
+                  if (conflictAddr != 0)
+                    cerr << std::hex << " addr=0x" << conflictAddr << std::dec;
+                  if (vecBytesB > 0 and (instrB.di_.isVectorLoad() or instrB.di_.isVectorStore()))
+                    cerr << " tag2-vec-bytes=" << vecBytesB;
+                  cerr << '\n';
+                  return false;
+                }
+            }
+        }
     }
 
   auto earlyB = effectiveMinTime(hart, instrB);
